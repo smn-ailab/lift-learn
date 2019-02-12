@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, clone
-from sklearn.linear_model import LogisticRegression as LR
 from sklearn.utils import check_array
 
 from .base import UpliftModelInterface
@@ -190,7 +189,7 @@ class SMARegressor(BaseEstimator, UpliftModelInterface):
         return pred_ite
 
 
-class TOM(BaseTOM):
+class TOM(BaseEstimator, UpliftModelInterface):
     """Transformed Outcome Method for Regression and Classification.
 
     References
@@ -199,9 +198,11 @@ class TOM(BaseTOM):
 
     """
 
+    _uplift_model_type = "meta_model"
+
     def __init__(self,
                  base_model: RegressorMixin,
-                 ps_estimator: ClassifierMixin=LR(C=100, solver="lbfgs", random_state=0),
+                 ps_model: ClassifierMixin,
                  name: Optional[str]=None) -> None:
         """Initialize Class.
 
@@ -210,46 +211,99 @@ class TOM(BaseTOM):
         base_model: object
             The base model from which the IPM based on TOM is built.
 
+        ps_model: object
+            The predictive model for propensity score estimation.
+
         name: string, optional (default=None)
             The name of the model.
 
         """
-        if not isinstance(base_model, RegressorMixin):
-            raise TypeError("set Regressor as base_model.")
-        if not isinstance(ps_estimator, ClassifierMixin):
-            raise TypeError("set Classifier as ps_estimator.")
+        self.base_model = base_model
+        self.ps_model = ps_model
+        self.name = f"TOM({name})" if name is not None else "TOM"
 
-        super().__init__(base_model, ps_estimator, name)
-
-    def fit(self, X: np.ndarray, y_obs: np.ndarray, w: np.ndarray) -> None:
-        """Build a Transformed Outcome Regressor from the training set (X, y_obs, w).
+    def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
+        """Build an uplift model from the training set (X, y, w).
 
         Parameters
         ----------
-        X : array-like of shape = (n_samples, n_features)
-            Training input samples.
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The training input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
 
-        y_obs : array-like of shape = (n_samples)
-            Observed target values.(class labels in classification, real numbers in regression).
+        y : array-like, shape = [n_samples]
+            The target values (class labels in classification, real numbers in
+            regression).
 
-        w : array-like of shape = (n_samples)
-            Treatment assignment indicators.
-
-        ps: array-like of shape = (n_samples)
-            Estimated propensity scores.
+        w : array-like, shape = [n_samples]
+            The treatment assignment.
 
         """
-        X = check_array(X, accept_sparse=('csr', 'csc'), dtype=[int, float])
-        if not isinstance(y_obs, np.ndarray):
-            raise TypeError("y_obs must be a numpy.ndarray.")
-        if not isinstance(w, np.ndarray):
-            raise TypeError("w must be a numpy.ndarray.")
+        # estimate propensity scores.
+        self.ps_model.fit(X, w)
+        ps = self.ps_model.predict_proba(X)[:, 1]
 
-        # estimate the propensity score.
-        self.ps_estimator.fit(X, w)
-        ps = self.ps_estimator.predict_proba(X)[:, 1]
-        transformed_outcome = self._calc_transformed_outcome(y_obs, w, ps)
+        # fit the base model.
+        transformed_outcome = self._transform_outcome(y, w, ps)
         self.base_model.fit(X, transformed_outcome)
+
+    def predict(self, X: np.ndarray) -> None:
+        """Predict optimal treatment for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        t : array of shape = [n_samples]
+            The predicted optimal treatments.
+
+        """
+        pred_ite = self.predict_ite(X)
+        return np.array(pred_ite > 0, dtype=int)
+
+    def predict_ite(self, X: np.ndarray) -> None:
+        """Predict individual treatment effects for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        ite : array of shape = [n_samples, (n_trts - 1)]
+            The predicted individual treatment effects.
+
+        """
+        return self.base_model.predict(X)
+
+    def _transform_outcome(self, y: np.ndarray, w: np.ndarray, ps: np.ndarray) -> np.ndarray:
+        """Calcurate Transformed Outcomes.
+
+        Parameters
+        ----------
+        y : array-like, shape = [n_samples]
+            The target values (class labels in classification, real numbers in
+            regression).
+
+        w : array-like, shape = [n_samples]
+            The treatment assignment.
+
+        ps: array-like, shape = [n_samples]
+            The estimated propensity scores.
+
+        Returns
+        ----------
+        to: array-like, shape = [n_samples]
+            The transformed outcomes.
+
+        """
+        return w * y / ps - (1 - w) * y / (1. - ps)
 
 
 class CVT(BaseTOM):
