@@ -1,11 +1,13 @@
 """Classes for meta-learning methods."""
+import os
+import sys
 from typing import Optional
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, clone
 from sklearn.utils import check_array
 
-from ..base import UpliftModelInterface
+from base import UpliftModelInterface
 
 
 def _transform_outcome(y: np.ndarray, w: np.ndarray, ps: np.ndarray,
@@ -277,7 +279,7 @@ class TOM(BaseEstimator, UpliftModelInterface):
         ps = self.ps_model.predict_proba(X)
 
         # fit the base model.
-        transformed_outcome = self._transform_outcome(y, w, ps)
+        transformed_outcome = _transform_outcome(y, w, ps)
         self.base_model.fit(X, transformed_outcome)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -474,7 +476,7 @@ class SDRMClassifier(BaseEstimator, UpliftModelInterface):
             estimated_potential_outcomes[:, trts_id] = po_model.predict_proba(X)[:, 1]
 
         # fit the base model.
-        transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
+        transformed_outcome = _transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
         self.base_model.fit(X, transformed_outcome)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -585,7 +587,7 @@ class SDRMRegressor(BaseEstimator, UpliftModelInterface):
             estimated_potential_outcomes[:, trts_id] = po_model.predict(X)
 
         # fit the base model.
-        transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
+        transformed_outcome = _transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
         self.base_model.fit(X, transformed_outcome)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
