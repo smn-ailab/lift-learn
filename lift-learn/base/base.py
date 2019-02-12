@@ -27,7 +27,7 @@ class UpliftModelInterface:
         pass
 
     @abstractmethod
-    def predict(self, X: np.ndarray) -> None:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict optimal treatment for X.
 
         Parameters
@@ -45,7 +45,7 @@ class UpliftModelInterface:
         pass
 
     @abstractmethod
-    def predict_ite(self, X: np.ndarray) -> None:
+    def predict_ite(self, X: np.ndarray) -> np.ndarray:
         """Predict individual treatment effects for X.
 
         Parameters

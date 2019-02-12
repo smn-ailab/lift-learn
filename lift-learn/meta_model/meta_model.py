@@ -91,7 +91,7 @@ class SMAClassifier(BaseEstimator, UpliftModelInterface):
             po_model.fit(X[w == trts_id], y[w == trts_id])
             self.fitted_po_models_.append(po_model)
 
-    def predict(self, X: np.ndarray) -> None:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict optimal treatment for X.
 
         Parameters
@@ -110,7 +110,7 @@ class SMAClassifier(BaseEstimator, UpliftModelInterface):
         _extented_pred_ite = np.concatenate([np.zeros((pred_ite.shape[0], i)), pred_ite], axis=1)
         return np.argmax(_extented_pred_ite, axis=1)
 
-    def predict_ite(self, X: np.ndarray) -> None:
+    def predict_ite(self, X: np.ndarray) -> np.ndarray:
         """Predict individual treatment effects for X.
 
         Parameters
@@ -181,7 +181,7 @@ class SMARegressor(BaseEstimator, UpliftModelInterface):
             po_model.fit(X[w == trts_id], y[w == trts_id])
             self.fitted_po_models_.append(po_model)
 
-    def predict(self, X: np.ndarray) -> None:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict optimal treatment for X.
 
         Parameters
@@ -200,7 +200,7 @@ class SMARegressor(BaseEstimator, UpliftModelInterface):
         _extented_pred_ite = np.concatenate([np.zeros((pred_ite.shape[0], i)), pred_ite], axis=1)
         return np.argmax(_extented_pred_ite, axis=1)
 
-    def predict_ite(self, X: np.ndarray) -> None:
+    def predict_ite(self, X: np.ndarray) -> np.ndarray:
         """Predict individual treatment effects for X.
 
         Parameters
@@ -282,7 +282,7 @@ class TOM(BaseEstimator, UpliftModelInterface):
         transformed_outcome = self._transform_outcome(y, w, ps)
         self.base_model.fit(X, transformed_outcome)
 
-    def predict(self, X: np.ndarray) -> None:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict optimal treatment for X.
 
         Parameters
@@ -300,7 +300,7 @@ class TOM(BaseEstimator, UpliftModelInterface):
         pred_ite = self.predict_ite(X)
         return np.array(pred_ite > 0, dtype=int)
 
-    def predict_ite(self, X: np.ndarray) -> None:
+    def predict_ite(self, X: np.ndarray) -> np.ndarray:
         """Predict individual treatment effects for X.
 
         Parameters
@@ -366,7 +366,7 @@ class CVT(BaseEstimator, UpliftModelInterface):
         transformed_outcome = w * y + (1 - w) * (1 - y)
         self.base_model.fit(X, transformed_outcome)
 
-    def predict(self, X: np.ndarray) -> None:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict optimal treatment for X.
 
         Parameters
@@ -384,7 +384,7 @@ class CVT(BaseEstimator, UpliftModelInterface):
         pred_ite = self.predict_ite(X)
         return np.array(pred_ite > 0, dtype=int)
 
-    def predict_ite(self, X: np.ndarray) -> None:
+    def predict_ite(self, X: np.ndarray) -> np.ndarray:
         """Predict individual treatment effects for X.
 
         Parameters
@@ -479,7 +479,7 @@ class SDRMClassifier(BaseEstimator, UpliftModelInterface):
         transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
         self.base_model.fit(X, transformed_outcome)
 
-    def predict(self, X: np.ndarray) -> None:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict optimal treatment for X.
 
         Parameters
@@ -497,7 +497,7 @@ class SDRMClassifier(BaseEstimator, UpliftModelInterface):
         pred_ite = self.predict_ite(X)
         return np.array(pred_ite > 0, dtype=int)
 
-    def predict_ite(self, X: np.ndarray) -> None:
+    def predict_ite(self, X: np.ndarray) -> np.ndarray:
         """Predict individual treatment effects for X.
 
         Parameters
@@ -590,7 +590,7 @@ class SDRMRegressor(BaseEstimator, UpliftModelInterface):
         transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
         self.base_model.fit(X, transformed_outcome)
 
-    def predict(self, X: np.ndarray) -> None:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict optimal treatment for X.
 
         Parameters
@@ -608,7 +608,7 @@ class SDRMRegressor(BaseEstimator, UpliftModelInterface):
         pred_ite = self.predict_ite(X)
         return np.array(pred_ite > 0, dtype=int)
 
-    def predict_ite(self, X: np.ndarray) -> None:
+    def predict_ite(self, X: np.ndarray) -> np.ndarray:
         """Predict individual treatment effects for X.
 
         Parameters
