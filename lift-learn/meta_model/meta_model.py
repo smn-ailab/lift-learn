@@ -92,8 +92,11 @@ class SMAClassifier(BaseEstimator, UpliftModelInterface):
         """
         pred_ite = np.zeros((X.shape[0], len(self.fitted_poms_) - 1))
         pred_baseline = self.fitted_poms_[0].predict_proba(X)
-        for trts_id, model in enumerate(self.fitted_poms_[1:]):
-            pred_ite[:, trts_id] = model.predict_proba(X) - pred_baseline
+        if pred_ite.ndim == 1:
+            pred_ite = self.fitted_poms_[1].predict_proba(X) - pred_baseline
+        else:
+            for trts_id, model in enumerate(self.fitted_poms_[1:]):
+                pred_ite[:, trts_id] = model.predict_proba(X) - pred_baseline
 
         return pred_ite
 
@@ -179,6 +182,8 @@ class SMARegressor(BaseEstimator, UpliftModelInterface):
         """
         pred_ite = np.zeros((X.shape[0], len(self.fitted_poms_) - 1))
         pred_baseline = self.fitted_poms_[0].predict(X)
+        if pred_ite.ndim == 1:
+            pred_ite = self.fitted_poms_[1].predict(X) - pred_baseline
         for trts_id, model in enumerate(self.fitted_poms_[1:]):
             pred_ite[:, trts_id] = model.predict(X) - pred_baseline
 
