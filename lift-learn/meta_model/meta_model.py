@@ -4,15 +4,17 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
-from sklearn.base import BaseEstimator
+from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, clone
 from sklearn.linear_model import LogisticRegression as LR
 from sklearn.utils import check_array
 
 from .base import UpliftModelInterface
 
 
-class SMAClassifier(BaseSMA):
+class SMAClassifier(BaseEstimator, UpliftModelInterface):
     """Separate-Model Approach for Classification."""
+
+    _uplift_model_type = "meta_model"
 
     def __init__(self,
                  pom: ClassifierMixin,
@@ -28,10 +30,72 @@ class SMAClassifier(BaseSMA):
             The name of the model.
 
         """
-        if not isinstance(pom, ClassifierMixin):
-            raise TypeError("set Classifier as pom.")
+        self.pom = pom
+        self.fitted_poms_: list = []
+        self.name = f"SMA{name}" if name is not None else "SMA"
 
-        super().__init__(pom, "classification", name)
+    def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
+        """Build an uplift model from the training set (X, y, w).
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The training input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+        y : array-like, shape = [n_samples]
+            The target values (class labels in classification, real numbers in
+            regression).
+        w : array-like, shape = [n_samples]
+            The treatment assignment.
+
+        """
+        n_trts = np.unique(w).shape[0]
+
+        for trts_id in np.arange(n_trts):
+            pom = clone(self.pom)
+            pom.fit(X[w == trts_id], y[w == trts_id])
+            self.fitted_poms_.append(pom)
+
+    def predict(self, X: np.ndarray) -> None:
+        """Predict optimal treatment for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        t : array of shape = [n_samples]
+            The predicted optimal treatments.
+
+        """
+        pred_ite = self.predict_ite(X)
+        _extented_pred_ite = np.concatenate([np.zeros((pred_ite.shape[0], i)), pred_ite], axis=1)
+        return np.argmax(_extented_pred_ite, axis=1)
+
+    def predict_ite(self, X: np.ndarray) -> None:
+        """Predict individual treatment effects for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        ite : array of shape = [n_samples, (n_trts - 1)]
+            The predicted individual treatment effects.
+
+        """
+        pred_ite = np.zeros((X.shape[0], len(self.fitted_poms_) - 1))
+        pred_baseline = self.fitted_poms_[0].predict_proba(X)
+        for trts_id, model in enumerate(self.fitted_poms_[1:]):
+            pred_ite[:, trts_id] = model.predict_proba(X) - pred_baseline
+
+        return pred_ite
 
 
 class SMARegressor(BaseSMA):
@@ -51,10 +115,9 @@ class SMARegressor(BaseSMA):
             The name of the model.
 
         """
-        if not isinstance(pom, RegressorMixin):
-            raise TypeError("set Regressor as pom.")
-
-        super().__init__(pom, "regression", name)
+        self.pom = pom
+        self.fitted_poms_: list = []
+        self.name = f"SMA{name}" if name is not None else "SMA"
 
 
 class TOM(BaseTOM):
