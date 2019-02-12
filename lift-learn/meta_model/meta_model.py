@@ -306,7 +306,7 @@ class TOM(BaseEstimator, UpliftModelInterface):
         return w * y / ps - (1 - w) * y / (1. - ps)
 
 
-class CVT(BaseTOM):
+class CVT(BaseEstimator, UpliftModelInterface):
     """Class Variable Transformation for Classification.
 
     References
@@ -314,6 +314,8 @@ class CVT(BaseTOM):
     [1] Maciej Jaskowski and Szymon Jaroszewicz. Uplift modeling for clinical trial data. In ICML Workshop on Clinical Data Analysis, 2012.
 
     """
+
+    _uplift_model_type = "meta_model"
 
     def __init__(self,
                  base_model: ClassifierMixin,
@@ -323,40 +325,70 @@ class CVT(BaseTOM):
         Parameters
         ----------
         base_model: object
-            The base estimator from which the IPM based on CVT is built.
+            The base model from which the IPM based on CVT is built.
 
         name: string, optional (default=None)
             The name of the model.
 
         """
-        if not isinstance(base_model, ClassifierMixin):
-            raise TypeError("set Classifier as base_model.")
+        self.base_model = base_model
+        self.name = f"CVT({name})" if name is not None else "CVT"
 
-        super().__init__(base_model, None, name)
-
-    def fit(self, X: np.ndarray, y_obs: np.ndarray, w: np.ndarray) -> None:
-        """Build a CVT estimator from the training set (X, y_obs, w).
+    def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
+        """Build an uplift model from the training set (X, y, w).
 
         Parameters
         ----------
-        X : array-like of shape = (n_samples, n_features)
-            Training input samples.
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The training input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
 
-        y_obs : array-like of shape = (n_samples)
-            Observed target values.(class labels).
+        y : array-like, shape = [n_samples]
+            The target values (class labels in classification, real numbers in
+            regression).
 
-        w : array-like of shape = (n_samples)
-            Treatment assignment indicators.
+        w : array-like, shape = [n_samples]
+            The treatment assignment.
 
         """
-        X = check_array(X, accept_sparse=('csr', 'csc'), dtype=[int, float])
-        if not isinstance(y_obs, np.ndarray):
-            raise TypeError("y_obs must be a numpy.ndarray.")
-        if not isinstance(w, np.ndarray):
-            raise TypeError("w must be a numpy.ndarray.")
+        # fit the base model.
+        transformed_outcome = w * y + (1 - w) * (1 - y)
+        self.base_model.fit(X, transformed_outcome)
 
-        z = y_obs * w + (1 - y_obs) * (1 - w)
-        self.base_model.fit(X, z)
+    def predict(self, X: np.ndarray) -> None:
+        """Predict optimal treatment for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        t : array of shape = [n_samples]
+            The predicted optimal treatments.
+
+        """
+        pred_ite = self.predict_ite(X)
+        return np.array(pred_ite > 0, dtype=int)
+
+    def predict_ite(self, X: np.ndarray) -> None:
+        """Predict individual treatment effects for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        ite : array of shape = [n_samples, (n_trts - 1)]
+            The predicted individual treatment effects.
+
+        """
+        return self.base_model.predict_proba(X)
 
 
 class SDRMClassifier(BaseSDRM):
