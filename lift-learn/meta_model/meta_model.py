@@ -8,57 +8,6 @@ from sklearn.base import ClassifierMixin, RegressorMixin
 from sklearn.linear_model import LogisticRegression as LR
 from sklearn.utils import check_array
 
-from .base import BaseSDRM, BaseSMA, BaseTMA, BaseTOM
-
-
-class TMAClassifier(BaseTMA):
-    """Two-Model Approach for Classification."""
-
-    def __init__(self,
-                 pom_treat: ClassifierMixin,
-                 pom_control: ClassifierMixin,
-                 name: Optional[str]=None) -> None:
-        """Initialize Class.
-
-        Parameters
-        ----------
-        pom_treat: object
-            The Potential Outcome Model for the treated from which the IPM based on TMA  is built.
-
-        pom_control: object
-            The Potential Outcome Model for the controlled from which the IPM based on TMA is built.
-
-        name: string, optional (default=None)
-            The name of the model.
-
-        """
-        if not isinstance(pom_treat, ClassifierMixin):
-            raise TypeError("set Classifier as pom_treat.")
-        if not isinstance(pom_control, ClassifierMixin):
-            raise TypeError("set Classifier as pom_control.")
-
-        super().__init__(pom_treat, pom_control, name)
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        """Predict the Individual Treatmenf Effects.
-
-        Parameters
-        ----------
-        X : array-like of shape = (n_samples, n_features)
-            Test input samples.
-
-        Returns
-        -------
-        ite_pred  : array-like of shape = (n_samples)
-            Estimated Individual Treatment Effects of the input samples.
-
-        """
-        X = check_array(X, accept_sparse=('csr', 'csc'), dtype=[int, float])
-
-        self.pred_treat, self.pred_control = self.pom_treat.predict_proba(X)[:, 1], self.pom_control.predict_proba(X)[:, 1]
-        ite_pred = self.pred_treat - self.pred_control
-        return ite_pred
-
 
 class SMAClassifier(BaseSMA):
     """Separate-Model Approach for Classification."""
@@ -104,55 +53,6 @@ class SMARegressor(BaseSMA):
             raise TypeError("set Regressor as pom.")
 
         super().__init__(pom, "regression", name)
-
-
-class TMARegressor(BaseTMA):
-    """Two-Model Approach for Regression."""
-
-    def __init__(self,
-                 pom_treat: RegressorMixin,
-                 pom_control: RegressorMixin,
-                 name: Optional[str]=None) -> None:
-        """Initialize Class.
-
-        Parameters
-        ----------
-        pom_treat: object
-            The Potential Outcome Model for the treated from which the IPM based on TMA is built.
-
-        pom_control: object
-            The Potential Outcome Model for the controlled from which the IPM based on TMA is built.
-
-        name: string, optional (default=None)
-            The name of the model.
-
-        """
-        if not isinstance(pom_treat, RegressorMixin):
-            raise TypeError("set Regressor as pom_treat.")
-        if not isinstance(pom_control, RegressorMixin):
-            raise TypeError("set Regressor as pom_control.")
-
-        super().__init__(pom_treat, pom_control, name)
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        """Predict the Individual Treatmenf Effects.
-
-        Parameters
-        ----------
-        X : array-like of shape = (n_samples, n_features)
-            Test input samples.
-
-        Returns
-        -------
-        ite_pred  : array-like of shape = (n_samples)
-            Estimated Individual Treatment Effects of the input samples.
-
-        """
-        X = check_array(X, accept_sparse=('csr', 'csc'), dtype=[int, float])
-
-        self.pred_treat, self.pred_control = self.pom_treat.predict(X), self.pom_control.predict(X)
-        ite_pred = self.pred_treat - self.pred_control
-        return ite_pred
 
 
 class TOM(BaseTOM):
