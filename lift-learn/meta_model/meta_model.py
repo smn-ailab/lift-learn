@@ -126,12 +126,12 @@ class SMAClassifier(BaseEstimator, UpliftModelInterface):
 
         """
         pred_ite = np.zeros((X.shape[0], len(self.fitted_poms_) - 1))
-        pred_baseline = self.fitted_poms_[0].predict_proba(X)
+        pred_baseline = self.fitted_poms_[0].predict_proba(X)[:, 1]
         if pred_ite.ndim == 1:
-            pred_ite = self.fitted_poms_[1].predict_proba(X) - pred_baseline
+            pred_ite = self.fitted_poms_[1].predict_proba(X)[:, 1] - pred_baseline
         else:
             for trts_id, model in enumerate(self.fitted_poms_[1:]):
-                pred_ite[:, trts_id] = model.predict_proba(X) - pred_baseline
+                pred_ite[:, trts_id] = model.predict_proba(X)[:, 1] - pred_baseline
 
         return pred_ite
 
@@ -277,7 +277,7 @@ class TOM(BaseEstimator, UpliftModelInterface):
         """
         # estimate propensity scores.
         self.ps_model.fit(X, w)
-        ps = self.ps_model.predict_proba(X)[:, 1]
+        ps = self.ps_model.predict_proba(X)
 
         # fit the base model.
         transformed_outcome = self._transform_outcome(y, w, ps)
@@ -401,7 +401,7 @@ class CVT(BaseEstimator, UpliftModelInterface):
             The predicted individual treatment effects.
 
         """
-        return self.base_model.predict_proba(X)
+        return self.base_model.predict_proba(X)[:, 1]
 
 
 class SDRMClassifier(BaseEstimator, UpliftModelInterface):
@@ -418,7 +418,7 @@ class SDRMClassifier(BaseEstimator, UpliftModelInterface):
     def __init__(self,
                  base_model: RegressorMixin,
                  pom: ClassifierMixin,
-                 ps_estimator: ClassifierMixin,
+                 ps_model: ClassifierMixin,
                  gamma: float=0.0,
                  name: Optional[str]=None) -> None:
         """Initialize Class.
