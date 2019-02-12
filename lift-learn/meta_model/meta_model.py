@@ -47,26 +47,26 @@ def _transform_outcome(self, y: np.ndarray, w: np.ndarray, ps: np.ndarray,
 
 
 class SMAClassifier(BaseEstimator, UpliftModelInterface):
-    """Separate-Model Approach for Classification."""
+    """Separate-Model Approach for Classification.
+
+    Parameters
+    ----------
+    po_model: object
+        The predictive model for potential outcome estimation.
+
+    name: string, optional (default=None)
+        The name of the model.
+
+    """
 
     _uplift_model_type = "meta_model"
 
     def __init__(self,
-                 pom: ClassifierMixin,
+                 po_model: ClassifierMixin,
                  name: Optional[str]=None) -> None:
-        """Initialize Class.
-
-        Parameters
-        ----------
-        pom: object
-            The Potential Outcome Model from which the TDF based on SMA is built.
-
-        name: string, optional (default=None)
-            The name of the model.
-
-        """
-        self.pom = pom
-        self.fitted_poms_: list = []
+        """Initialize Class."""
+        self.po_model = po_model
+        self.fitted_po_models_: list = []
         self.name = f"SMA{name}" if name is not None else "SMA"
 
     def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
@@ -87,9 +87,9 @@ class SMAClassifier(BaseEstimator, UpliftModelInterface):
         n_trts = np.unique(w).shape[0]
 
         for trts_id in np.arange(n_trts):
-            pom = clone(self.pom)
-            pom.fit(X[w == trts_id], y[w == trts_id])
-            self.fitted_poms_.append(pom)
+            po_model = clone(self.po_model)
+            po_model.fit(X[w == trts_id], y[w == trts_id])
+            self.fitted_po_models_.append(po_model)
 
     def predict(self, X: np.ndarray) -> None:
         """Predict optimal treatment for X.
@@ -125,38 +125,38 @@ class SMAClassifier(BaseEstimator, UpliftModelInterface):
             The predicted individual treatment effects.
 
         """
-        pred_ite = np.zeros((X.shape[0], len(self.fitted_poms_) - 1))
-        pred_baseline = self.fitted_poms_[0].predict_proba(X)[:, 1]
+        pred_ite = np.zeros((X.shape[0], len(self.fitted_po_models_) - 1))
+        pred_baseline = self.fitted_po_models_[0].predict_proba(X)[:, 1]
         if pred_ite.ndim == 1:
-            pred_ite = self.fitted_poms_[1].predict_proba(X)[:, 1] - pred_baseline
+            pred_ite = self.fitted_po_models_[1].predict_proba(X)[:, 1] - pred_baseline
         else:
-            for trts_id, model in enumerate(self.fitted_poms_[1:]):
+            for trts_id, model in enumerate(self.fitted_po_models_[1:]):
                 pred_ite[:, trts_id] = model.predict_proba(X)[:, 1] - pred_baseline
 
         return pred_ite
 
 
 class SMARegressor(BaseEstimator, UpliftModelInterface):
-    """Separate-Model Approach for Regression."""
+    """Separate-Model Approach for Regression.
+
+    Parameters
+    ----------
+    po_model: object
+        The predictive model for potential outcome estimation.
+
+    name: string, optional (default=None)
+        The name of the model.
+
+    """
 
     _uplift_model_type = "meta_model"
 
     def __init__(self,
-                 pom: RegressorMixin,
+                 po_model: RegressorMixin,
                  name: Optional[str]=None) -> None:
-        """Initialize Class.
-
-        Parameters
-        ----------
-        pom: object
-            The Potential Outcome Model from which the TDF based on SMA is built.
-
-        name: string, optional (default=None)
-            The name of the model.
-
-        """
-        self.pom = pom
-        self.fitted_poms_: list = []
+        """Initialize Class."""
+        self.po_model = po_model
+        self.fitted_po_models_: list = []
         self.name = f"SMA{name}" if name is not None else "SMA"
 
     def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
@@ -177,9 +177,9 @@ class SMARegressor(BaseEstimator, UpliftModelInterface):
         n_trts = np.unique(w).shape[0]
 
         for trts_id in np.arange(n_trts):
-            pom = clone(self.pom)
-            pom.fit(X[w == trts_id], y[w == trts_id])
-            self.fitted_poms_.append(pom)
+            po_model = clone(self.po_model)
+            po_model.fit(X[w == trts_id], y[w == trts_id])
+            self.fitted_po_models_.append(po_model)
 
     def predict(self, X: np.ndarray) -> None:
         """Predict optimal treatment for X.
@@ -215,11 +215,11 @@ class SMARegressor(BaseEstimator, UpliftModelInterface):
             The predicted individual treatment effects.
 
         """
-        pred_ite = np.zeros((X.shape[0], len(self.fitted_poms_) - 1))
-        pred_baseline = self.fitted_poms_[0].predict(X)
+        pred_ite = np.zeros((X.shape[0], len(self.fitted_po_models_) - 1))
+        pred_baseline = self.fitted_po_models_[0].predict(X)
         if pred_ite.ndim == 1:
-            pred_ite = self.fitted_poms_[1].predict(X) - pred_baseline
-        for trts_id, model in enumerate(self.fitted_poms_[1:]):
+            pred_ite = self.fitted_po_models_[1].predict(X) - pred_baseline
+        for trts_id, model in enumerate(self.fitted_po_models_[1:]):
             pred_ite[:, trts_id] = model.predict(X) - pred_baseline
 
         return pred_ite
@@ -228,9 +228,21 @@ class SMARegressor(BaseEstimator, UpliftModelInterface):
 class TOM(BaseEstimator, UpliftModelInterface):
     """Transformed Outcome Method for Regression and Classification.
 
+    Parameters
+    ----------
+    base_model: object
+        The base model from which TOM is built.
+
+    ps_model: object
+        The predictive model for propensity score estimation.
+
+    name: string, optional (default=None)
+        The name of the model.
+
     References
     ----------
-    [1] Susan Athey and Guido W Imbens. Machine learning methods for estimating heterogeneous causal effects. arxiv, 2015.
+    [1] Susan Athey and Guido W Imbens.  "Machine learning methods for
+        estimating heterogeneous causal effects", arxiv, 2015.
 
     """
 
@@ -240,20 +252,7 @@ class TOM(BaseEstimator, UpliftModelInterface):
                  base_model: RegressorMixin,
                  ps_model: ClassifierMixin,
                  name: Optional[str]=None) -> None:
-        """Initialize Class.
-
-        Parameters
-        ----------
-        base_model: object
-            The base model from which the IPM based on TOM is built.
-
-        ps_model: object
-            The predictive model for propensity score estimation.
-
-        name: string, optional (default=None)
-            The name of the model.
-
-        """
+        """Initialize Class."""
         self.base_model = base_model
         self.ps_model = ps_model
         self.name = f"TOM({name})" if name is not None else "TOM"
@@ -322,9 +321,18 @@ class TOM(BaseEstimator, UpliftModelInterface):
 class CVT(BaseEstimator, UpliftModelInterface):
     """Class Variable Transformation for Classification.
 
+    Parameters
+    ----------
+    base_model: object
+        The base model from which CVT is bulit.
+
+    name: string, optional (default=None)
+        The name of the model.
+
     References
     ----------
-    [1] Maciej Jaskowski and Szymon Jaroszewicz. Uplift modeling for clinical trial data. In ICML Workshop on Clinical Data Analysis, 2012.
+    [1] Maciej Jaskowski and Szymon Jaroszewicz. "Uplift modeling for
+        clinical trial data", In ICML Workshop on Clinical Data Analysis, 2012.
 
     """
 
@@ -333,17 +341,7 @@ class CVT(BaseEstimator, UpliftModelInterface):
     def __init__(self,
                  base_model: ClassifierMixin,
                  name: Optional[str]=None) -> None:
-        """Initialize Class.
-
-        Parameters
-        ----------
-        base_model: object
-            The base model from which the IPM based on CVT is built.
-
-        name: string, optional (default=None)
-            The name of the model.
-
-        """
+        """Initialize Class."""
         self.base_model = base_model
         self.name = f"CVT({name})" if name is not None else "CVT"
 
@@ -407,9 +405,28 @@ class CVT(BaseEstimator, UpliftModelInterface):
 class SDRMClassifier(BaseEstimator, UpliftModelInterface):
     """Switch Doubly Robust Method for Classification.
 
+    Parameters
+    ----------
+    base_model: object
+        The base model from which the SDRM is built.
+
+    po_model: object
+        The predictive model for potential outcome estimation.
+
+    ps_model: object
+        The predictive model for propensity score estimation.
+
+    gamma: float, optional (default=0,0)
+        The switching hyper-parameter.
+
+    name: string, optional (default=None)
+        The name of the model.
+
     References
     ----------
-    [1] Doubly Robust Prediction and Evaluation Methods Improve Uplift Modeling for Observaional Data, 2018.
+    [1] Yuta Saito, Hayato Sakata, and Kazuhide Nakata. "Doubly Robust Prediction
+        and Evaluation Methods Improve Uplift Modeling for Observaional Data",
+        In Proceedings of the SIAM International Conference on Data Mining, 2019.
 
     """
 
@@ -417,33 +434,14 @@ class SDRMClassifier(BaseEstimator, UpliftModelInterface):
 
     def __init__(self,
                  base_model: RegressorMixin,
-                 pom: ClassifierMixin,
+                 po_model: ClassifierMixin,
                  ps_model: ClassifierMixin,
                  gamma: float=0.0,
                  name: Optional[str]=None) -> None:
-        """Initialize Class.
-
-        Parameters
-        ----------
-        base_model: object
-            The base model from which the IPM based on SDRM is built.
-
-        pom_treat: object
-            The Potential Outcome Model for the treated from which the proxy_outcome is calculated.
-
-        pom_control: object
-            The Potential Outcome Model for the controlled from which the proxy_outcome is calculated.
-
-        gamma: float, (default=0,0)
-            The switching hyper-parameter gamma for SDRM.
-
-        name: string, optional (default=None)
-            The name of the model.
-
-        """
+        """Initialize Class."""
         self.base_model = base_model
-        self.pom = pom
-        self.fitted_poms_: list = []
+        self.po_model = po_model
+        self.fitted_po_models_: list = []
         self.ps_model = ps_model
         self.gamma = gamma
         self.name = f"SDRM({name})" if name is not None else "SDRM"
@@ -472,10 +470,10 @@ class SDRMClassifier(BaseEstimator, UpliftModelInterface):
         # estimate potential outcomes.
         estimated_potential_outcomes = np.zeros((X.shape[0], 2))
         for trts_id in np.arange(2):
-            pom = clone(self.pom)
-            pom.fit(X[w == trts_id], y[w == trts_id])
-            self.fitted_poms_.append(pom)
-            estimated_potential_outcomes[:, trts_id] = pom.predict_proba(X)[:, 1]
+            po_model = clone(self.po_model)
+            po_model.fit(X[w == trts_id], y[w == trts_id])
+            self.fitted_po_models_.append(po_model)
+            estimated_potential_outcomes[:, trts_id] = po_model.predict_proba(X)[:, 1]
 
         # fit the base model.
         transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
@@ -520,41 +518,41 @@ class SDRMClassifier(BaseEstimator, UpliftModelInterface):
 class SDRMRegressor(BaseEstimator, UpliftModelInterface):
     """Switch Doubly Robust Method for Regression.
 
+    Parameters
+    ----------
+    base_model: object
+        The base model from which the SDRM is built.
+
+    po_model: object
+        The predictive model for potential outcome estimation.
+
+    ps_model: object
+        The predictive model for propensity score estimation.
+
+    gamma: float, optional (default=0,0)
+        The switching hyper-parameter.
+
+    name: string, optional (default=None)
+        The name of the model.
+
     References
     ----------
-    [1] Doubly Robust Prediction and Evaluation Methods Improve Uplift Modeling for Observaional Data, 2018.
+    [1] Yuta Saito, Hayato Sakata, and Kazuhide Nakata. "Doubly Robust Prediction
+        and Evaluation Methods Improve Uplift Modeling for Observaional Data",
+        In Proceedings of the SIAM International Conference on Data Mining, 2019.
 
     """
 
     def __init__(self,
                  base_model: RegressorMixin,
-                 pom: RegressorMixin,
+                 po_model: RegressorMixin,
                  ps_model: ClassifierMixin,
                  gamma: float=0.0,
                  name: Optional[str]=None) -> None:
-        """Initialize Class.
-
-        Parameters
-        ----------
-        base_model: object
-            The base model from which the IPM based on SDRM is built.
-
-        pom_treat: object
-            The Potential Outcome Model for the treated from which the proxy outcome is calculated.
-
-        pom_control: object
-            The Potential Outcome Model for the controlled from which the proxy outcome is calculated.
-
-        gamma: float, (default=0,0)
-            The switching hyper-parameter gamma for SDRM.
-
-        name: string, optional (default=None)
-            The name of the model.
-
-        """
+        """Initialize Class."""
         self.base_model = base_model
-        self.pom = pom
-        self.fitted_poms_: list = []
+        self.po_model = po_model
+        self.fitted_po_models_: list = []
         self.ps_model = ps_model
         self.gamma = gamma
         self.name = f"SDRM({name})" if name is not None else "SDRM"
@@ -583,10 +581,10 @@ class SDRMRegressor(BaseEstimator, UpliftModelInterface):
         # estimate potential outcomes.
         estimated_potential_outcomes = np.zeros((X.shape[0], 2))
         for trts_id in np.arange(2):
-            pom = clone(self.pom)
-            pom.fit(X[w == trts_id], y[w == trts_id])
-            self.fitted_poms_.append(pom)
-            estimated_potential_outcomes[:, trts_id] = pom.predict(X)
+            po_model = clone(self.po_model)
+            po_model.fit(X[w == trts_id], y[w == trts_id])
+            self.fitted_po_models_.append(po_model)
+            estimated_potential_outcomes[:, trts_id] = po_model.predict(X)
 
         # fit the base model.
         transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
