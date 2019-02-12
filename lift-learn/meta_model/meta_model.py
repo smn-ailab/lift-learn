@@ -10,6 +10,42 @@ from sklearn.utils import check_array
 from .base import UpliftModelInterface
 
 
+def _transform_outcome(self, y: np.ndarray, w: np.ndarray, ps: np.ndarray,
+                       mu: Optional[np.ndarray]=None, gamma: float=0.0) -> np.ndarray:
+    """Calcurate Transformed Outcomes.
+
+    Parameters
+    ----------
+    y : array-like, shape = [n_samples]
+        The target values (class labels in classification, real numbers in
+        regression).
+
+    w : array-like, shape = [n_samples]
+        The treatment assignment.
+
+    ps: array-like, shape = [n_samples]
+        The estimated propensity scores.
+
+    mu: array-like, shape = [n_samples]
+        The estimated potential outcomes.
+
+    gamma: float, optional (default=0.0)
+
+    Returns
+    ----------
+    transformed_outcome: array-like, shape = [n_samples]
+        The transformed outcomes.
+
+    """
+    mu = np.zeros((y.shape[0], 2)) if mu is None else mu
+
+    direct_estimates = mu[:, 1] - mu[:, 0]
+    transformed_outcome = w * (y - mu[:, 1]) / ps[:, 1] - (1 - w) * (y - mu[:, 0]) / ps[:, 0] + direct_estimates
+    transformed_outcome[(w == 1) & (ps[:, 1] < gamma)] = direct_estimates[(w == 1) & (ps[:, 1] < gamma)]
+    transformed_outcome[(w == 0) & (ps[:, 0] < gamma)] = direct_estimates[(w == 0) & (ps[:, 0] < gamma)]
+    return transformed_outcome
+
+
 class SMAClassifier(BaseEstimator, UpliftModelInterface):
     """Separate-Model Approach for Classification."""
 
@@ -282,29 +318,6 @@ class TOM(BaseEstimator, UpliftModelInterface):
         """
         return self.base_model.predict(X)
 
-    def _transform_outcome(self, y: np.ndarray, w: np.ndarray, ps: np.ndarray) -> np.ndarray:
-        """Calcurate Transformed Outcomes.
-
-        Parameters
-        ----------
-        y : array-like, shape = [n_samples]
-            The target values (class labels in classification, real numbers in
-            regression).
-
-        w : array-like, shape = [n_samples]
-            The treatment assignment.
-
-        ps: array-like, shape = [n_samples]
-            The estimated propensity scores.
-
-        Returns
-        ----------
-        to: array-like, shape = [n_samples]
-            The transformed outcomes.
-
-        """
-        return w * y / ps - (1 - w) * y / (1. - ps)
-
 
 class CVT(BaseEstimator, UpliftModelInterface):
     """Class Variable Transformation for Classification.
@@ -432,6 +445,7 @@ class SDRMClassifier(BaseEstimator, UpliftModelInterface):
         self.pom = pom
         self.fitted_poms_: list = []
         self.ps_model = ps_model
+        self.gamma = gamma
         self.name = f"SDRM({name})" if name is not None else "SDRM"
 
     def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
@@ -464,7 +478,7 @@ class SDRMClassifier(BaseEstimator, UpliftModelInterface):
             estimated_potential_outcomes[:, trts_id] = pom.predict_proba(X)[:, 1]
 
         # fit the base model.
-        transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes)
+        transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
         self.base_model.fit(X, transformed_outcome)
 
     def predict(self, X: np.ndarray) -> None:
@@ -501,38 +515,6 @@ class SDRMClassifier(BaseEstimator, UpliftModelInterface):
 
         """
         return self.base_model.predict(X)
-
-    def _transform_outcome(self, y: np.ndarray, w: np.ndarray, ps: np.ndarray, mu: np.ndarray, gamma: float=0.0) -> np.ndarray:
-        """Calcurate Transformed Outcomes.
-
-        Parameters
-        ----------
-        y : array-like, shape = [n_samples]
-            The target values (class labels in classification, real numbers in
-            regression).
-
-        w : array-like, shape = [n_samples]
-            The treatment assignment.
-
-        ps: array-like, shape = [n_samples]
-            The estimated propensity scores.
-
-        mu: array-like, shape = [n_samples]
-            The estimated potential outcomes.
-
-        gamma: float, optional (default=0.0)
-
-        Returns
-        ----------
-        transformed_outcome: array-like, shape = [n_samples]
-            The transformed outcomes.
-
-        """
-        direct_estimates = mu[:, 1] - mu[:, 0]
-        transformed_outcome = w * (y - mu[:, 1]) / ps[:, 1] - (1 - w) * (y - mu[:, 0]) / ps[:, 0] + direct_estimates
-        transformed_outcome[(w == 1) & (ps[:, 1] < gamma)] = direct_estimates[(w == 1) & (ps[:, 1] < gamma)]
-        transformed_outcome[(w == 0) & (ps[:, 0] < gamma)] = direct_estimates[(w == 0) & (ps[:, 0] < gamma)]
-        return transformed_outcome
 
 
 class SDRMRegressor(BaseEstimator, UpliftModelInterface):
@@ -574,6 +556,7 @@ class SDRMRegressor(BaseEstimator, UpliftModelInterface):
         self.pom = pom
         self.fitted_poms_: list = []
         self.ps_model = ps_model
+        self.gamma = gamma
         self.name = f"SDRM({name})" if name is not None else "SDRM"
 
     def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
@@ -606,7 +589,7 @@ class SDRMRegressor(BaseEstimator, UpliftModelInterface):
             estimated_potential_outcomes[:, trts_id] = pom.predict(X)
 
         # fit the base model.
-        transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes)
+        transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
         self.base_model.fit(X, transformed_outcome)
 
     def predict(self, X: np.ndarray) -> None:
@@ -643,35 +626,3 @@ class SDRMRegressor(BaseEstimator, UpliftModelInterface):
 
         """
         return self.base_model.predict(X)
-
-    def _transform_outcome(self, y: np.ndarray, w: np.ndarray, ps: np.ndarray, mu: np.ndarray, gamma: float=0.0) -> np.ndarray:
-        """Calcurate Transformed Outcomes.
-
-        Parameters
-        ----------
-        y : array-like, shape = [n_samples]
-            The target values (class labels in classification, real numbers in
-            regression).
-
-        w : array-like, shape = [n_samples]
-            The treatment assignment.
-
-        ps: array-like, shape = [n_samples]
-            The estimated propensity scores.
-
-        mu: array-like, shape = [n_samples]
-            The estimated potential outcomes.
-
-        gamma: float, optional (default=0.0)
-
-        Returns
-        ----------
-        transformed_outcome: array-like, shape = [n_samples]
-            The transformed outcomes.
-
-        """
-        direct_estimates = mu[:, 1] - mu[:, 0]
-        transformed_outcome = w * (y - mu[:, 1]) / ps[:, 1] - (1 - w) * (y - mu[:, 0]) / ps[:, 0] + direct_estimates
-        transformed_outcome[(w == 1) & (ps[:, 1] < gamma)] = direct_estimates[(w == 1) & (ps[:, 1] < gamma)]
-        transformed_outcome[(w == 0) & (ps[:, 0] < gamma)] = direct_estimates[(w == 0) & (ps[:, 0] < gamma)]
-        return transformed_outcome
