@@ -4,9 +4,11 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
-from sklearn.base import ClassifierMixin, RegressorMixin
+from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression as LR
 from sklearn.utils import check_array
+
+from .base import UpliftModelInterface
 
 
 class SMAClassifier(BaseSMA):
