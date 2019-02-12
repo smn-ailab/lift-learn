@@ -2,15 +2,13 @@
 from typing import Optional
 
 import numpy as np
-import pandas as pd
-from pandas import DataFrame
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, clone
 from sklearn.utils import check_array
 
-from .base import UpliftModelInterface
+from ..base import UpliftModelInterface
 
 
-def _transform_outcome(self, y: np.ndarray, w: np.ndarray, ps: np.ndarray,
+def _transform_outcome(y: np.ndarray, w: np.ndarray, ps: np.ndarray,
                        mu: Optional[np.ndarray]=None, gamma: float=0.0) -> np.ndarray:
     """Calcurate Transformed Outcomes.
 
@@ -107,7 +105,7 @@ class SMAClassifier(BaseEstimator, UpliftModelInterface):
 
         """
         pred_ite = self.predict_ite(X)
-        _extented_pred_ite = np.concatenate([np.zeros((pred_ite.shape[0], i)), pred_ite], axis=1)
+        _extented_pred_ite = np.concatenate([np.zeros((pred_ite.shape[0], 1)), pred_ite], axis=1)
         return np.argmax(_extented_pred_ite, axis=1)
 
     def predict_ite(self, X: np.ndarray) -> np.ndarray:
@@ -197,7 +195,7 @@ class SMARegressor(BaseEstimator, UpliftModelInterface):
 
         """
         pred_ite = self.predict_ite(X)
-        _extented_pred_ite = np.concatenate([np.zeros((pred_ite.shape[0], i)), pred_ite], axis=1)
+        _extented_pred_ite = np.concatenate([np.zeros((pred_ite.shape[0], 1)), pred_ite], axis=1)
         return np.argmax(_extented_pred_ite, axis=1)
 
     def predict_ite(self, X: np.ndarray) -> np.ndarray:
