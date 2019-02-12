@@ -400,11 +400,12 @@ class SDRMClassifier(BaseSDRM):
 
     """
 
+    _uplift_model_type = "meta_model"
+
     def __init__(self,
                  base_model: RegressorMixin,
-                 pom_treat: ClassifierMixin,
-                 pom_control: ClassifierMixin,
-                 ps_estimator: ClassifierMixin=LR(C=100, solver="lbfgs", random_state=0),
+                 pom: ClassifierMixin,
+                 ps_estimator: ClassifierMixin,
                  gamma: float=0.0,
                  name: Optional[str]=None) -> None:
         """Initialize Class.
@@ -427,35 +428,111 @@ class SDRMClassifier(BaseSDRM):
             The name of the model.
 
         """
-        if not isinstance(pom_treat, ClassifierMixin):
-            raise TypeError("set Classifier as pom_treat.")
-        if not isinstance(pom_control, ClassifierMixin):
-            raise TypeError("set Classifier as pom_control.")
+        self.base_model = base_model
+        self.pom = pom
+        self.fitted_poms_: list = []
+        self.ps_model = ps_model
+        self.name = f"SDRM({name})" if name is not None else "SDRM"
 
-        BaseSDRM.__init__(self, base_model, pom_treat, pom_control, ps_estimator, gamma, name)
-
-    def fit(self, X: np.ndarray, y_obs: np.ndarray, w: np.ndarray) -> None:
-        """Build a SDRM Classifier from the training set (X, y_obs, w).
+    def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
+        """Build an uplift model from the training set (X, y, w).
 
         Parameters
         ----------
-        X : array-like of shape = (n_samples, n_features)
-            Training input samples.
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The training input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
 
-        y_obs : array-like of shape = (n_samples)
-            Observed target values.(class labels).
+        y : array-like, shape = [n_samples]
+            The target values (class labels in classification, real numbers in
+            regression).
 
-        w : array-like of shape = (n_samples)
-            Treatment assignment indicators.
+        w : array-like, shape = [n_samples]
+            The treatment assignment.
 
         """
-        X = check_array(X, accept_sparse=('csr', 'csc'), dtype=[int, float])
+        # estimate propensity scores.
+        self.ps_model.fit(X, w)
+        ps = self.ps_model.predict_proba(X)
 
-        super().fit(X, y_obs, w)
-        pred_treat, pred_control = self.pom_treat.predict_proba(X)[:, 1], self.pom_control.predict_proba(X)[:, 1]
-        proxy_outcome = self._calc_switch_doubly_robust_outcome(y_obs, w, self.ps,
-                                                                pred_treat, pred_control, self.gamma)
-        self.base_model.fit(X, proxy_outcome)
+        # estimate potential outcomes.
+        estimated_potential_outcomes = np.zeros((X.shape[0], 2))
+        for trts_id in np.arange(2):
+            pom = clone(self.pom)
+            pom.fit(X[w == trts_id], y[w == trts_id])
+            self.fitted_poms_.append(pom)
+            estimated_potential_outcomes[:, trts_id] = pom.predict_proba(X)[:, 1]
+
+        # fit the base model.
+        transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes)
+        self.base_model.fit(X, transformed_outcome)
+
+    def predict(self, X: np.ndarray) -> None:
+        """Predict optimal treatment for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        t : array of shape = [n_samples]
+            The predicted optimal treatments.
+
+        """
+        pred_ite = self.predict_ite(X)
+        return np.array(pred_ite > 0, dtype=int)
+
+    def predict_ite(self, X: np.ndarray) -> None:
+        """Predict individual treatment effects for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        ite : array of shape = [n_samples, (n_trts - 1)]
+            The predicted individual treatment effects.
+
+        """
+        return self.base_model.predict(X)
+
+    def _transform_outcome(self, y: np.ndarray, w: np.ndarray, ps: np.ndarray, mu: np.ndarray, gamma: float=0.0) -> np.ndarray:
+        """Calcurate Transformed Outcomes.
+
+        Parameters
+        ----------
+        y : array-like, shape = [n_samples]
+            The target values (class labels in classification, real numbers in
+            regression).
+
+        w : array-like, shape = [n_samples]
+            The treatment assignment.
+
+        ps: array-like, shape = [n_samples]
+            The estimated propensity scores.
+
+        mu: array-like, shape = [n_samples]
+            The estimated potential outcomes.
+
+        gamma: float, optional (default=0.0)
+
+        Returns
+        ----------
+        transformed_outcome: array-like, shape = [n_samples]
+            The transformed outcomes.
+
+        """
+        direct_estimates = mu[:, 1] - mu[:, 0]
+        transformed_outcome = w * (y - mu[:, 1]) / ps[:, 1] - (1 - w) * (y - mu[:, 0]) / ps[:, 0] + direct_estimates
+        transformed_outcome[(w == 1) & (ps[:, 1] < gamma)] = direct_estimates[(w == 1) & (ps[:, 1] < gamma)]
+        transformed_outcome[(w == 0) & (ps[:, 0] < gamma)] = direct_estimates[(w == 0) & (ps[:, 0] < gamma)]
+        return transformed_outcome
 
 
 class SDRMRegressor(BaseSDRM):
