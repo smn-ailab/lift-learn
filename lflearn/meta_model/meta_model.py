@@ -195,7 +195,7 @@ class SDRMClassifier(SDRMCommon):
                  gamma: float=0.0,
                  name: Optional[str]=None) -> None:
         """Initialize Class."""
-        super().__init__(base_model, ps_model, ps_model, gamma, name, True)
+        super().__init__(base_model, po_model, ps_model, gamma, name, True)
 
 
 class SDRMRegressor(SDRMCommon):
@@ -235,4 +235,4 @@ class SDRMRegressor(SDRMCommon):
                  gamma: float=0.0,
                  name: Optional[str]=None) -> None:
         """Initialize Class."""
-        super().__init__(base_model, ps_model, ps_model, gamma, name, False)
+        super().__init__(base_model, po_model, ps_model, gamma, name, False)
