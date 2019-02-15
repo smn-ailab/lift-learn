@@ -46,7 +46,7 @@ class SMARegressor(SMACommon):
     _uplift_model_type = "meta_model"
 
     def __init__(self,
-                 po_model: ClassifierMixin,
+                 po_model: RegressorMixin,
                  name: Optional[str]=None) -> None:
         """Initialize Class."""
         super().__init__(po_model, name, False)
@@ -230,7 +230,7 @@ class SDRMRegressor(SDRMCommon):
 
     def __init__(self,
                  base_model: RegressorMixin,
-                 po_model: ClassifierMixin,
+                 po_model: RegressorMixin,
                  ps_model: ClassifierMixin,
                  gamma: float=0.0,
                  name: Optional[str]=None) -> None:
