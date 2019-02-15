@@ -215,10 +215,8 @@ class SMACommon(BaseEstimator, UpliftModelInterface):
             The predicted individual treatment effects.
 
         """
-        try:
-            self.fitted_po_models != []
-        except NotFittedError:
-            print("Call fit before prediction")
+        if self.fitted_po_models == []:
+            raise NotFittedError("Call fit before prediction")
 
         pred_ite = np.zeros((X.shape[0], len(self.fitted_po_models) - 1))
         baselines: list = []
@@ -267,10 +265,8 @@ class SDRMCommon(TransformationBasedModel):
             The treatment assignment. The values should be binary.
 
         """
-        try:
-            np.unique(w).shape[0] == 2
-        except MultiTreatmentError:
-            print("treatment assignments shoul be binary values")
+        if np.unique(w).shape[0] != 2:
+            raise MultiTreatmentError("treatment assignments shoul be binary values")
 
         # estimate propensity scores.
         self.ps_model.fit(X, w)

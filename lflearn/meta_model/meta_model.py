@@ -100,10 +100,8 @@ class TOM(TransformationBasedModel):
             The treatment assignment. The values should be binary.
 
         """
-        try:
-            np.unique(w).shape[0] == 2
-        except MultiTreatmentError:
-            print("treatment assignments shoul be binary values")
+        if np.unique(w).shape[0] != 2:
+            raise MultiTreatmentError("treatment assignments shoul be binary values")
 
         # estimate propensity scores.
         self.ps_model.fit(X, w)
@@ -158,10 +156,8 @@ class CVT(TransformationBasedModel):
             The treatment assignment. The values should be binary.
 
         """
-        try:
-            np.unique(w).shape[0] == 2
-        except MultiTreatmentError:
-            print("treatment assignments shoul be binary values")
+        if np.unique(w).shape[0] != 2:
+            raise MultiTreatmentError("treatment assignments shoul be binary values")
 
         # fit the base model.
         transformed_outcome = w * y + (1 - w) * (1 - y)
