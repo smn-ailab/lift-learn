@@ -130,6 +130,68 @@ class PropensityBasedModel(BaseEstimator, UpliftModelInterface):
         return transformed_outcome
 
 
+class SMACommon(BaseEstimator, UpliftModelInterface):
+    """Base Class for SMA."""
+
+    def __init__(self,
+                 po_model: RegressorMixin,
+                 name: Optional[str]=None,
+                 is_classifier: bool=True) -> None:
+        """Initialize Class."""
+        self.po_model = po_model
+        self.fitted_po_models: list = []
+        self.name = f"SMA{name}" if name is not None else "SMA"
+        self.is_classifier = is_classifier
+
+    def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
+        """Build an uplift model from the training set (X, y, w).
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The training input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+        y : array-like, shape = [n_samples]
+            The target values (class labels in classification, real numbers in
+            regression).
+        w : array-like, shape = [n_samples]
+            The treatment assignment.
+
+        """
+        n_trts = np.unique(w).shape[0]
+
+        for trts_id in np.arange(n_trts):
+            po_model = clone(self.po_model)
+            po_model.fit(X[w == trts_id], y[w == trts_id])
+            self.fitted_po_models.append(po_model)
+
+    def predict_ite(self, X: np.ndarray) -> np.ndarray:
+        """Predict individual treatment effects for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        ite : array of shape = [n_samples, (n_trts - 1)]
+            The predicted individual treatment effects.
+
+        """
+        pred_ite = np.zeros((X.shape[0], len(self.fitted_po_models) - 1))
+        baselines: list = []
+        for trts_id, model in enumerate(self.fitted_po_models):
+            ites = model.predict_proba(X)[:, 1] if self.is_classifier else model.predict(X)
+            if trts_id == 0:
+                baselines = ites
+            else:
+                pred_ite[:, trts_id - 1] = ites - baselines
+
+        return pred_ite
+
+
 class SDRMCommon(PropensityBasedModel):
     """Base Class for SDRM."""
 
@@ -174,7 +236,7 @@ class SDRMCommon(PropensityBasedModel):
         for trts_id in np.arange(2):
             po_model = clone(self.po_model)
             po_model.fit(X[w == trts_id], y[w == trts_id])
-            self.fitted_po_models_.append(po_model)
+            self.fitted_po_models.append(po_model)
             estimated_potential_outcomes[:, trts_id] = po_model.predict_proba(X)[:, 1] if self.is_classifier else po_model.predict(X)
 
         # fit the base model.
