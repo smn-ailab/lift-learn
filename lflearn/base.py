@@ -121,7 +121,7 @@ class TransformationBasedModel(BaseEstimator, UpliftModelInterface):
             regression).
 
         w : array-like, shape = [n_samples]
-            The treatment assignment.
+            The treatment assignment. The values should be binary.
 
         ps: array-like, shape = [n_samples]
             The estimated propensity scores.
@@ -215,6 +215,11 @@ class SMACommon(BaseEstimator, UpliftModelInterface):
             The predicted individual treatment effects.
 
         """
+        try:
+            self.fitted_po_models != []
+        except NotFittedError:
+            print("Call fit before prediction")
+
         pred_ite = np.zeros((X.shape[0], len(self.fitted_po_models) - 1))
         baselines: list = []
         for trts_id, model in enumerate(self.fitted_po_models):
@@ -259,9 +264,14 @@ class SDRMCommon(TransformationBasedModel):
             regression).
 
         w : array-like, shape = [n_samples]
-            The treatment assignment.
+            The treatment assignment. The values should be binary.
 
         """
+        try:
+            np.unique(w).shape[0] == 2
+        except MultiTreatmentError:
+            print("treatment assignments shoul be binary values")
+
         # estimate propensity scores.
         self.ps_model.fit(X, w)
         ps = self.ps_model.predict_proba(X)
@@ -277,3 +287,15 @@ class SDRMCommon(TransformationBasedModel):
         # fit the base model.
         transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
         self.base_model.fit(X, transformed_outcome)
+
+
+class UpliftModelError(Exception):
+    """Base class for exceptions of uplift model."""
+
+
+class NotFittedError(UpliftModelError):
+    """Exception raised for errors in the prediction before model fitting."""
+
+
+class MultiTreatmentError(UpliftModelError):
+    """Exception raised for errors in the treatment assignment input."""

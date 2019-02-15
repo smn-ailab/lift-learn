@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.base import ClassifierMixin, RegressorMixin
 from sklearn.utils import check_array
 
-from base import SDRMCommon, SMACommon, TransformationBasedModel
+from base import MultiTreatmentError, SDRMCommon, SMACommon, TransformationBasedModel
 
 
 class SMAClassifier(SMACommon):
@@ -97,9 +97,14 @@ class TOM(TransformationBasedModel):
             regression).
 
         w : array-like, shape = [n_samples]
-            The treatment assignment.
+            The treatment assignment. The values should be binary.
 
         """
+        try:
+            np.unique(w).shape[0] == 2
+        except MultiTreatmentError:
+            print("treatment assignments shoul be binary values")
+
         # estimate propensity scores.
         self.ps_model.fit(X, w)
         ps = self.ps_model.predict_proba(X)
@@ -150,9 +155,14 @@ class CVT(TransformationBasedModel):
             regression).
 
         w : array-like, shape = [n_samples]
-            The treatment assignment.
+            The treatment assignment. The values should be binary.
 
         """
+        try:
+            np.unique(w).shape[0] == 2
+        except MultiTreatmentError:
+            print("treatment assignments shoul be binary values")
+
         # fit the base model.
         transformed_outcome = w * y + (1 - w) * (1 - y)
         self.base_model.fit(X, transformed_outcome)
