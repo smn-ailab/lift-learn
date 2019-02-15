@@ -43,9 +43,7 @@ class UpliftModelInterface:
             The predicted optimal treatments.
 
         """
-        pred_ite = self.predict_ite(X)
-        _extented_pred_ite = np.concatenate([np.zeros((pred_ite.shape[0], 1)), pred_ite], axis=1)
-        return np.argmax(_extented_pred_ite, axis=1)
+        pass
 
     @abstractmethod
     def predict_ite(self, X: np.ndarray) -> np.ndarray:
@@ -76,6 +74,24 @@ class TransformationBasedModel(BaseEstimator, UpliftModelInterface):
         self.base_model = base_model
         if ps_model is not None:
             self.ps_model = ps_model
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Predict optimal treatment for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        t : array of shape = [n_samples]
+            The predicted optimal treatments.
+
+        """
+        pred_ite = self.predict_ite(X)
+        return np.array(pred_ite > 0, dtype=int)
 
     def predict_ite(self, X: np.ndarray) -> np.ndarray:
         """Predict individual treatment effects for X.
@@ -164,6 +180,25 @@ class SMACommon(BaseEstimator, UpliftModelInterface):
             po_model = clone(self.po_model)
             po_model.fit(X[w == trts_id], y[w == trts_id])
             self.fitted_po_models.append(po_model)
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Predict optimal treatment for X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            The test input samples. Sparse matrices are accepted only if
+            they are supported by the base estimator.
+
+        Returns
+        -------
+        t : array of shape = [n_samples]
+            The predicted optimal treatments.
+
+        """
+        pred_ite = self.predict_ite(X)
+        _extented_pred_ite = np.concatenate([np.zeros((pred_ite.shape[0], 1)), pred_ite], axis=1)
+        return np.argmax(_extented_pred_ite, axis=1)
 
     def predict_ite(self, X: np.ndarray) -> np.ndarray:
         """Predict individual treatment effects for X.
