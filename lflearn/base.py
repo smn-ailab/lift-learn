@@ -66,8 +66,8 @@ class UpliftModelInterface:
         pass
 
 
-class PropensityBasedModel(BaseEstimator, UpliftModelInterface):
-    """Base class for all propensity based uplift models in lift-learn."""
+class TransformationBasedModel(BaseEstimator, UpliftModelInterface):
+    """Base class for all transformation based uplift models in lift-learn."""
 
     def __init__(self,
                  base_model: Union[ClassifierMixin, RegressorMixin],
@@ -192,7 +192,7 @@ class SMACommon(BaseEstimator, UpliftModelInterface):
         return pred_ite
 
 
-class SDRMCommon(PropensityBasedModel):
+class SDRMCommon(TransformationBasedModel):
     """Base Class for SDRM."""
 
     def __init__(self,

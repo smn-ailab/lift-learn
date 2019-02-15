@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.base import ClassifierMixin, RegressorMixin
 from sklearn.utils import check_array
 
-from base import PropensityBasedModel, SDRMCommon, SMACommon
+from base import SDRMCommon, SMACommon, TransformationBasedModel
 
 
 class SMAClassifier(SMACommon):
@@ -52,7 +52,7 @@ class SMARegressor(SMACommon):
         super().__init__(po_model, name, False)
 
 
-class TOM(PropensityBasedModel):
+class TOM(TransformationBasedModel):
     """Transformed Outcome Method for Regression and Classification.
 
     Parameters
@@ -109,7 +109,7 @@ class TOM(PropensityBasedModel):
         self.base_model.fit(X, transformed_outcome)
 
 
-class CVT(PropensityBasedModel):
+class CVT(TransformationBasedModel):
     """Class Variable Transformation for Classification.
 
     Parameters
