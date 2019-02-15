@@ -42,7 +42,9 @@ class UpliftModelInterface:
             The predicted optimal treatments.
 
         """
-        pass
+        pred_ite = self.predict_ite(X)
+        _extented_pred_ite = np.concatenate([np.zeros((pred_ite.shape[0], 1)), pred_ite], axis=1)
+        return np.argmax(_extented_pred_ite, axis=1)
 
     @abstractmethod
     def predict_ite(self, X: np.ndarray) -> np.ndarray:
