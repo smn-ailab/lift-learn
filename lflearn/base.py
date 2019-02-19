@@ -4,7 +4,7 @@ from typing import Optional, Union
 
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin, clone
-from .exception import MultiTreatmentError, NotFittedError
+from exceptions import MultiTreatmentError, NotFittedError
 
 
 class UpliftModelInterface:
