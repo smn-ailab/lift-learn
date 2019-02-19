@@ -4,6 +4,7 @@ from typing import Optional, Union
 
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin, clone
+from .exception import MultiTreatmentError, NotFittedError
 
 
 class UpliftModelInterface:
@@ -266,7 +267,7 @@ class SDRMCommon(TransformationBasedModel):
 
         """
         if np.unique(w).shape[0] != 2:
-            raise MultiTreatmentError("treatment assignments shoul be binary values")
+            raise MultiTreatmentError("treatment assignments should be binary values")
 
         # estimate propensity scores.
         self.ps_model.fit(X, w)
@@ -283,15 +284,3 @@ class SDRMCommon(TransformationBasedModel):
         # fit the base model.
         transformed_outcome = self._transform_outcome(y, w, ps, estimated_potential_outcomes, self.gamma)
         self.base_model.fit(X, transformed_outcome)
-
-
-class UpliftModelError(Exception):
-    """Base class for exceptions of uplift model."""
-
-
-class NotFittedError(UpliftModelError):
-    """Exception raised for errors in the prediction before model fitting."""
-
-
-class MultiTreatmentError(UpliftModelError):
-    """Exception raised for errors in the treatment assignment input."""
