@@ -10,7 +10,7 @@ from plotly.graph_objs import Bar, Box, Figure, Layout, Scatter
 from plotly.offline import init_notebook_mode, iplot, plot
 
 
-def uplift_frame(ite_pred: np.ndarray,
+def uplift_frame(ite_pred: np.ndarray, policy: np.ndarray,
                  y: Optional[np.ndarray]=None, w: Optional[np.ndarray]=None,
                  mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None,
                  gamma: float=0.0, real_world: bool=True) -> DataFrame:
@@ -18,49 +18,37 @@ def uplift_frame(ite_pred: np.ndarray,
 
     Parameters
     ----------
-    ite_pred: array-like of shape = (n_samples, n_trts - 1)
-        Estimated Individual Treatment Effects.
+    ite_pred: array-like of shape = [n_samples, n_trts - 1]
+        The predicted values of Individual Treatment Effects.
 
-    policy: array-like of shape = (n_samples,)
-        Estimated Individual Treatment Effects.
+    policy: array-like of shape = [n_samples]
+        Treatment policy.
 
-    y: array-like of shape = (n_samples)
-        Observed target values.
+    y : array-like, shape = [n_samples]
+        The target values (class labels in classification, real numbers in
+        regression).
 
-    w: array-like of shape = (n_samples)
-        Treatment assignment indicators.
+    w : array-like, shape = [n_samples]
+        The treatment assignment. The values should be binary.
 
-    mu: array-like of shape = (n_samples, n_trts), optional
-        Estimated potential outcomes for the treated.
+    mu: array-like, shape = [n_samples]
+        The estimated potential outcomes.
 
-    ps: array-like of shape = (n_samples), optional
-        Estimated propensity scores.
-
-    threshold: float (default=0.0), optional
-        A cipping threshold for estimated propensity scores.
+    ps: array-like, shape = [n_samples]
+        The estimated propensity scores.
 
     gamma: float (default=0.0), optional
         A switching parameter for doubly robust method.
 
     real_world: bool (default=True), optional
-        If the given data is real-world or synthetic.
+        Whether the given data is real-world or synthetic.
 
     Returns
     -------
     df: Dataframe of shape = (n_samples, 9)
         An uplift frame.
 
-    References
-    ----------
-    [1] 有賀康顕, 中山心太, 西林孝: 仕事で始める機械学習, オライリー・ジャパン, 2017.
-
     """
-    if ite_pred.ndim == 1:
-        ite_pred = np.c_[np.zeros(ite_pred.shape[0]), ite_pred]
-        policy = np.ones(ite_pred.shape[0], dtype=int)
-    else:
-        policy = np.argmax(ite_pred[:, 1], axis=1) + 1
-
     if real_world:
         test_data = _create_uplift_frame_from_real_data(ite_pred, policy, y, w, mu, ps, gamma)
     else:
@@ -79,60 +67,40 @@ def uplift_frame(ite_pred: np.ndarray,
 def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray,
                                         y: np.ndarray, w: np.ndarray,
                                         mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None, gamma: float=0.0,) -> List:
-    """Create uplift from from synthetic data."""
-    # Initialize variables.
+    """Create uplift from synthetic data."""
+    # initialize variables.
     num_data = w.shape[0]
     num_trts = np.unique(w).shape[0]
-    num_treated_data = 0
-    num_baseline_data = 0
     treat_outcome = 0
     baseline_outcome = 0
     treat_value = 0.0
+    # preprocess potential outcomes and propensity estimations.
     ps = np.ones((num_data, num_trts)) * pd.get_dummies(w).values.mean(axis=0) if ps is None else ps
     mu = np.zeros((num_data, num_trts)) if mu is None else mu
-    baseline_indicator = np.array(w == 0, dtype=int)
-    baseline_value = np.sum(mu[:, 0] + baseline_indicator * (y - mu[:, 0]) / ps[:, 0])
+    # estimate value of the all baseline policy.
+    baseline_value = np.sum(mu[:, 0] + np.array(w == 0, dtype=int) * (y - mu[:, 0]) / ps[:, 0])
 
-    # Sort data according to the ite from the baseline treatment.
-    sorted_ite_from_baseline = np.argsort(np.max(ite_pred[:, 1:], axis=1))
+    # sort data according to the predicted ite values.
+    sorted_idx = np.argsort(np.max(ite_pred[:, 1:], axis=1))
     y, w, policy, ps, mu, ite_pred = \
-        y[sorted_ite_from_baseline][::-1], \
-        w[sorted_ite_from_baseline][::-1], \
-        policy[sorted_ite_from_baseline][::-1], \
-        ps[sorted_ite_from_baseline][::-1], \
-        mu[sorted_ite_from_baseline][::-1], \
-        ite_pred[sorted_ite_from_baseline][::-1]
+        y[sorted_idx][::-1], w[sorted_idx][::-1], \
+        ite_pred[sorted_idx][::-1], policy[sorted_idx][::-1], \
+        ps[sorted_idx][::-1], mu[sorted_idx][::-1]
 
-    # Estimate lift and value at each treatment point.
+    # estimate lift and value at each treatment point.
     test_data: list = []
     for y_iter, w_iter, ps_iter, mu_iter, pol_iter, ite_iter in zip(y, w, ps, mu, policy, ite_pred):
-        if w_iter == 0:
-            num_baseline_data += 1
-            if ps_iter[0] < gamma:
-                baseline_value -= mu_iter[0]
-                baseline_outcome += mu_iter[0]
-            else:
-                baseline_value -= mu_iter[0] + (y_iter - mu_iter[0]) / ps_iter[0]
-                baseline_outcome += mu_iter[0] + (y_iter - mu_iter[0]) / ps_iter[0]
+
+        indicator = np.int((w_iter == pol_iter) & (ps_iter[pol_iter] > gamma))
+        if pol_iter == 0:
+            baseline_outcome += mu_iter[0] + indicator * (y_iter - mu_iter[0]) / ps_iter[0]
+        else:
+            baseline_value -= mu_iter[0] + indicator * (y_iter - mu_iter[0]) / ps_iter[0]
             treat_value += mu_iter[pol_iter]
             treat_outcome += mu_iter[pol_iter]
 
-        else:
-            num_treated_data += 1
-            indicator = np.int(w_iter == pol_iter)
-            if ps_iter[pol_iter] < gamma:
-                treat_value += mu_iter[pol_iter]
-                treat_outcome += mu_iter[pol_iter]
-            else:
-                treat_value += mu_iter[pol_iter] + indicator * (y_iter - mu_iter[pol_iter]) / ps_iter[pol_iter]
-                treat_outcome += mu_iter[pol_iter] + indicator * (y_iter - mu_iter[pol_iter]) / ps_iter[pol_iter]
-            baseline_value -= mu_iter[0]
-            baseline_outcome += mu_iter[0]
-
-        # calc lift at each intervention point.
-        lift = treat_outcome - baseline_outcome
-        # calc value at each intervention point.
-        value = (treat_value + baseline_value) / num_data
+        # calc lift and value.
+        lift, value = treat_outcome - baseline_outcome, (treat_value + baseline_value) / num_data
 
         test_data.append([y_iter, w_iter, pol_iter, ite_iter[pol_iter], lift, value])
 
@@ -141,33 +109,28 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
 
 def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray, mu: np.ndarray) -> List:
     """Create uplift from from synthetic data."""
-    # Initialize variables.
+    # initialize variables.
     num_data = mu.shape[0]
     treat_outcome = 0
     baseline_outcome = 0
     treat_value = 0.0
+    # estimate value of the all baseline policy.
     baseline_value = np.sum(mu[:, 0])
 
-    # Sort data according to the ite from the baseline treatment.
-    sorted_ite_from_baseline = np.argsort(np.max(ite_pred[:, 1:], axis=1))
-    policy, mu, ite_pred = policy[sorted_ite_from_baseline][::-1], \
-        mu[sorted_ite_from_baseline][::-1], \
-        ite_pred[sorted_ite_from_baseline][::-1]
+    # sort data according to the predicted ite values.
+    sorted_idx = np.argsort(np.max(ite_pred[:, 1:], axis=1))
+    policy, mu, ite_pred = policy[sorted_idx][::-1], mu[sorted_idx][::-1], ite_pred[sorted_idx][::-1]
 
-    # Estimate lift and value at each treatment point.
+    # estimate lift and value at each treatment point.
     test_data: list = []
-    n_iter = 0
     for mu_iter, pol_iter, ite_iter in zip(mu, policy, ite_pred):
-        n_iter += 1
         treat_value += mu_iter[pol_iter]
         baseline_value -= mu_iter[0]
         treat_outcome += mu_iter[pol_iter]
         baseline_outcome += mu_iter[0]
 
-        # calc lift at each intervention point.
-        lift = treat_outcome - baseline_outcome
-        # calc value at each intervention point.
-        value = (treat_value + baseline_value) / num_data
+        # calc lift and value.
+        lift, value = treat_outcome - baseline_outcome, (treat_value + baseline_value) / num_data
 
         test_data.append([mu_iter[pol_iter], pol_iter, ite_iter[pol_iter], lift, value])
 
@@ -176,16 +139,26 @@ def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray
 
 def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
                          mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None,
-                         ite: Optional[np.ndarray]=None) -> DataFrame:
+                         ite_true: Optional[np.ndarray]=None) -> DataFrame:
     """Create uplift frame, which is used to plot uplift curves or modified uplift curve.
 
     Parameters
     ----------
-    y: array-like of shape = (n_samples)
-        Observed target values.
+    y : array-like, shape = [n_samples]
+        The target values (class labels in classification, real numbers in
+        regression).
 
-    w: array-like of shape = (n_samples)
-        Treatment assignment indicators.
+    w : array-like, shape = [n_samples]
+        The treatment assignment. The values should be binary.
+
+    mu: array-like, shape = [n_samples]
+        The estimated potential outcomes.
+
+    ps: array-like, shape = [n_samples]
+        The estimated propensity scores.
+
+    ite_true: array-like of shape = [n_samples, n_trts - 1]
+        The true values of Individual Treatment Effects.
 
     Returns
     -------
@@ -193,26 +166,24 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
         The uplift frame of the optimal policy.
 
     """
-    if ite is None:
-        # calc value_matrix for the given test data.
+    if ite_true is None:
         num_data, num_trts = w.shape[0], np.unique(w).shape[0]
-        if ps is None:
-            ps_matrix = np.ones((num_data, num_trts)) * pd.get_dummies(w).values.mean(axis=0)
-        if mu is None:
-            mu_matrix = np.zeros((num_data, num_trts))
-        outcome_matrix = np.expand_dims(y, axis=1) * w
-        value_matrix = mu_matrix + (outcome_matrix - mu_matrix) / ps_matrix
+        # preprocess potential outcome and propensity estimations.
+        ps = np.ones((num_data, num_trts)) * pd.get_dummies(w).values.mean(axis=0) if ps is None else ps
+        mu = np.zeros((num_data, num_trts)) if mu is None else mu
+        # estimate potential outcomes of the given test data.
+        value_matrix = mu + (np.expand_dims(y, axis=1) * w - mu) / ps
 
         # calc the optimal ite estimator and the optimal policy.
-        optimal_ite = value_matrix - value_matrix[:, 0]
+        optimal_ite = value_matrix[:, 1] - value_matrix[:, 0]
         optimal_policy = np.argmax(value_matrix, axis=1)
 
         # create the optimal uplift frame.
         optimal_frame = _create_uplift_frame_from_real_data(optimal_ite, optimal_policy, y, w, mu, ps)
 
     else:
-        optimal_policy = np.argmax(ite, axis=1)
-        optimal_frame = _create_uplift_frame_from_synthetic(ite, optimal_policy, mu)
+        optimal_policy = np.argmax(ite_true, axis=1)
+        optimal_frame = _create_uplift_frame_from_synthetic(ite_true, optimal_policy, mu)
 
     return optimal_frame
 
