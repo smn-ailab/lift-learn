@@ -308,50 +308,6 @@ def uplift_bar(y: np.ndarray, w: np.ndarray, ite_pred: np.ndarray,
     return fig
 
 
-def treat_percentile_bar(w: np.ndarray, ite_pred: np.ndarray) -> Figure:
-    """Plot treat percentile bar.
-
-    Parameters
-    ----------
-    w: array-like of shape = (n_samples)
-        Treatment assignment indicators.
-
-    ite_pred: array-like of shape = (n_samples)
-        Estimated Individual Treatment Effects.
-
-    Returns
-    -------
-    fig: Figure
-        An treat percentile bar.
-
-    """
-    if not isinstance(w, np.ndarray):
-        raise TypeError("w must be a numpy.ndarray.")
-    if not isinstance(ite_pred, np.ndarray):
-        raise TypeError("ite_pred must be a numpy.ndarray.")
-
-    # sort data according to the estimated ITEs.
-    df = DataFrame(np.vstack((w, ite_pred)).T,
-                   columns=["w", "ite_pred"]).sort_values(by="ite_pred", ascending=False).reset_index(drop=True)
-    qdf = DataFrame(columns=["pct_treated"])
-
-    # divide data into deciles.
-    for n in np.arange(10):
-        start = (n * df.shape[0] / 10)
-        end = ((n + 1) * df.shape[0] / 10) - 1
-        _df = df.loc[start:end]
-
-        pct_treated = _df.treat.mean()
-
-        label = f"{n * 10}%~{(n + 1) * 10}%"
-        qdf.loc[label] = [pct_treated]
-
-    trace = Bar(x=qdf.index.tolist(), y=qdf.pct_treated.tolist())
-    layout = Layout(yaxis={"title": "Propensity of being treated"}, xaxis={"title": "Uplift Score Percentile"})
-    fig = Figure(data=[trace], layout=layout)
-    return fig
-
-
 def uplift_curve(uplift_frame: DataFrame, name: str, rounds: int=3) -> Figure:
     """Plot Uplift Curve.
 
