@@ -247,7 +247,7 @@ def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray
 
 def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
                          mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None,
-                         ite_true: Optional[np.ndarray]=None) -> DataFrame:
+                         ite_true: Optional[np.ndarray]=None, gamma: float=0.) -> DataFrame:
     """Create uplift frame, which is used to plot uplift curves or modified uplift curve.
 
     Parameters
@@ -268,6 +268,9 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
     ite_true: array-like of shape = [n_samples, n_trts - 1]
         The true values of Individual Treatment Effects.
 
+    gamma: float (default=0.0), optional
+        A switching parameter for doubly robust method.
+
     Returns
     -------
     df: Dataframe of shape = (n_samples, 9)
@@ -280,8 +283,8 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
         ps = np.ones((num_data, num_trts)) * pd.get_dummies(w).values.mean(axis=0) if ps is None else ps
         mu = np.zeros((num_data, num_trts)) if mu is None else mu
         # estimate potential outcomes of the given test data.
-        y, w = np.expand_dims(y, axis=1), pd.get_dummies(w).values
-        value = mu + w * (y - mu) / ps
+        _y, _w = np.expand_dims(y, axis=1), pd.get_dummies(w).values
+        value = mu + np.array(ps > gamma, dtype=int) * _w * (_y - mu) / ps
 
         # calc the optimal ite estimator and the optimal policy.
         optimal_ite = value[:, 1] - value[:, 0]
