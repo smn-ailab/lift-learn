@@ -22,11 +22,11 @@ def sdr_mse(y: np.ndarray, w: np.ndarray, ite_pred: np.ndarray,
     ite_pred: array-like of shape = (n_samples)
         The predicted values of Individual Treatment Effects.
 
-    ps: array-like, shape = [n_samples]
-        The estimated propensity scores.
-
     mu: array-like, shape = [n_samples]
         The estimated potential outcomes.
+
+    ps: array-like, shape = [n_samples]
+        The estimated propensity scores.
 
     gamma: float, optional (default=0.0)
         The switching hyper-parameter.

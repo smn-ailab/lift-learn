@@ -21,11 +21,12 @@ def expected_response(y: np.ndarray, w: np.ndarray, policy: np.ndarray,
     policy: array-like of shape = [n_samples]
         Treatment policy.
 
+    mu: array-like, shape = [n_samples]
+        The estimated potential outcomes.
+
     ps: array-like, shape = [n_samples]
         The estimated propensity scores.
 
-    mu: array-like, shape = [n_samples]
-        The estimated potential outcomes.
 
     Returns
     -------
