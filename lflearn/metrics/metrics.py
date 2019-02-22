@@ -48,7 +48,7 @@ def sdr_mse(y: np.ndarray, w: np.ndarray, ite_pred: np.ndarray,
     """
     # preprocess potential outcome and propensity estimations.
     mu = np.zeros((w.shape[0], 2)) if mu is None else mu
-    ps = pd.get_dummies(w).mean(axis=0).values[w] if ps is None else ps[np.arange(w.shape[0]), w]
+    ps = pd.get_dummies(w).mean(axis=0).values[w] if ps is None else ps
     # calcurate switch doubly robust outcome.
     direct_estimates = mu[:, 1] - mu[:, 0]
     transformed_outcome = w * (y - mu[:, 1]) / ps[:, 1] - (1 - w) * (y - mu[:, 0]) / ps[:, 0] + direct_estimates
@@ -93,13 +93,13 @@ def expected_response(y: np.ndarray, w: np.ndarray, policy: np.ndarray,
         General Response Types." In Proceedings of the SIAM International Conference on Data Mining, 2017.
 
     """
+    num_data, num_trts = w.shape[0], np.unique(w).shape[0]
     # preprocess potential outcome and propensity estimations.
-    mu = np.zeros((w.shape[0], np.unique(w).shape[0])) if mu is None else mu
-    ps = pd.get_dummies(w).mean(axis=0).values if ps is None else ps
+    mu = np.zeros(num_data) if mu is None else mu[np.arange(num_data), w]
+    ps = pd.get_dummies(w).mean(axis=0).values[w] if ps is None else ps[np.arange(num_data), w]
     # estimate expected response of the policy.
     indicator = np.array(w == policy, dtype=int)
-    expected_response = np.mean(mu[np.arange(w.shape[0]), policy]
-                                + (y - mu[np.arange(w.shape[0]), policy]) * indicator / ps[w])
+    expected_response = np.mean(mu + w * (y - mu) * indicator / ps)
 
     return expected_response
 
@@ -280,7 +280,8 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
         ps = np.ones((num_data, num_trts)) * pd.get_dummies(w).values.mean(axis=0) if ps is None else ps
         mu = np.zeros((num_data, num_trts)) if mu is None else mu
         # estimate potential outcomes of the given test data.
-        value = mu + (np.expand_dims(y * w, axis=1) - mu) / ps
+        y, w = np.expand_dims(y, axis=1), pd.get_dummies(w).values
+        value = mu + w * (y - mu) / ps
 
         # calc the optimal ite estimator and the optimal policy.
         optimal_ite = value[:, 1] - value[:, 0]
