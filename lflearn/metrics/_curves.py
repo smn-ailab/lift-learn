@@ -89,16 +89,26 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
     # estimate lift and value at each treatment point.
     test_data: list = []
     # Adding all zero value columns to choose the best treatment including baseline one.
+    best_trt = np.argmax(ite_pred[:, 1:], axis=1) if num_trts != 2 else np.ones(num_data, dtype=int)
     ite_pred = np.c_[np.zeros((ite_pred.shape[0],)), ite_pred]
-    for y_iter, w_iter, ps_iter, mu_iter, pol_iter, ite_iter in zip(y, w, ps, mu, policy, ite_pred):
+    for y_iter, w_iter, ps_iter, mu_iter, pol_iter, trt_iter, ite_iter in zip(y, w, ps, mu, policy, best_trt, ite_pred):
 
+        # value
         indicator = np.int((w_iter == pol_iter) & (ps_iter[pol_iter] > gamma))
         if pol_iter == 0:
             baseline_outcome += mu_iter[0] + indicator * (y_iter - mu_iter[0]) / ps_iter[0]
         else:
-            baseline_value -= mu_iter[0] + indicator * (y_iter - mu_iter[0]) / ps_iter[0]
-            treat_value += mu_iter[pol_iter]
-            treat_outcome += mu_iter[pol_iter]
+            baseline_value -= mu_iter[0]
+            treat_value += mu_iter[pol_iter] + indicator * (y_iter - mu_iter[pol_iter]) / ps_iter[pol_iter]
+
+        # lift
+        indicator = np.int((w_iter == trt_iter) & (ps_iter[trt_iter] > gamma))
+        if w_iter == 0:
+            treat_outcome += mu_iter[trt_iter]
+            baseline_outcome += mu_iter[0] + np.int(ps_iter[0] > gamma) * (y_iter - mu_iter[0]) / ps_iter[0]
+        else:
+            treat_outcome += mu_iter[trt_iter] + indicator * (y_iter - mu_iter[trt_iter]) / ps_iter[trt_iter]
+            baseline_outcome += mu_iter[0]
 
         # calc lift and value.
         lift, value = treat_outcome - baseline_outcome, (treat_value + baseline_value) / num_data
