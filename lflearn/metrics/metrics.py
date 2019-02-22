@@ -1,5 +1,5 @@
 """Metrics to assess performance on ite prediction task."""
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -383,8 +383,8 @@ def uplift_bar(ite_pred: np.ndarray, policy: np.ndarray, y: np.ndarray, w: np.nd
     return fig
 
 
-def compare_uplift_curves(uplift_frames: List[DataFrame], name_list: List[str]=[]) -> Figure:
-    """Compare several uplift curves.
+def compare_uplift_curves(uplift_frames: List[DataFrame], name_list: List[str]=[]) -> Tuple[Figure, Figure]:
+    """Compare several uplift curves and modified uplift curves.
 
     Parameters
     ----------
@@ -396,46 +396,35 @@ def compare_uplift_curves(uplift_frames: List[DataFrame], name_list: List[str]=[
 
     Returns
     -------
-    fig: Figure
-        The uplift curves.
+    curve_fig, modi_curve_fig: Tuple[Figure, Figure]
+        The Figure of uplift curves and the modified uplift curves.
+
+    References
+    ----------
+    [1] Yan Zhao, Xiao Fang, and David Simchi-Levi. "Uplift Modeling with Multiple Treatments and
+        General Response Types." In Proceedings of the SIAM International Conference on Data Mining, 2017.
 
     """
+    # figure of modified uplift curves.
     curve_list = [Scatter(x=np.arange(df.shape[0]) / df.shape[0],
                           y=np.ravel(df.lift.values), name=name, line=dict(width=4))
                   for df, name in zip(uplift_frames, name_list)]
     curve_list.append(Scatter(x=np.arange(uplift_frames[0].shape[0]) / uplift_frames[0].shape[0],
                               y=np.ravel(uplift_frames[0].baseline_lift.values), name="Baseline"))
-    layout = Layout(title=f"Uplift Curve",
-                    yaxis=dict(title="Average Uplift", titlefont=dict(size=15)),
-                    xaxis=dict(title="Proportion of Treated Individuals",
-                               titlefont=dict(size=15), tickfont=dict(size=15)))
-    fig = Figure(data=curve_list, layout=layout)
-    return fig
+    curve_layout = Layout(title=f"Uplift Curve",
+                          yaxis=dict(title="Average Uplift", titlefont=dict(size=15)),
+                          xaxis=dict(title="Proportion of Treated Individuals",
+                                     titlefont=dict(size=15), tickfont=dict(size=15)))
+    curve_fig = Figure(data=curve_list, layout=curve_layout)
 
+    # figure of modified uplift curves.
+    modi_curve_list = [Scatter(x=np.arange(df.shape[0]) / df.shape[0],
+                               y=np.ravel(df.value.values), name=name, line=dict(width=4))
+                       for df, name in zip(uplift_frames, name_list)]
+    modi_curve_layout = Layout(title="Modified Uplift Curve",
+                               yaxis=dict(title="Expected Response", titlefont=dict(size=15)),
+                               xaxis=dict(title="Proportion of Treated Individuals",
+                                          titlefont=dict(size=15), tickfont=dict(size=15)))
+    modi_curve_fig = Figure(data=modi_curve_list, layout=modi_curve_layout)
 
-def compare_modified_uplift_curves(uplift_frames: List[DataFrame], name_list: List[str]=[]) -> Figure:
-    """Compare several modified uplift curves.
-
-    Parameters
-    ----------
-    uplift_frames: list of DataFrames of shape = (n_samples, 9)
-        An uplift frame.
-
-    name_list: list
-        Names of modeling methods.
-
-    Returns
-    -------
-    fig: Figure
-        The modified uplift curves.
-
-    """
-    curve_list = [Scatter(x=np.arange(df.shape[0]) / df.shape[0],
-                          y=np.ravel(df.value.values), name=name, line=dict(width=4))
-                  for df, name in zip(uplift_frames, name_list)]
-    layout = Layout(title="Modified Uplift Curve",
-                    yaxis=dict(title="Expected Response", titlefont=dict(size=15)),
-                    xaxis=dict(title="Proportion of Treated Individuals",
-                               titlefont=dict(size=15), tickfont=dict(size=15)))
-    fig = Figure(data=curve_list, layout=layout)
-    return fig
+    return curve_fig, modi_curve_fig
