@@ -7,7 +7,6 @@ from pandas import DataFrame
 from sklearn.metrics import mean_squared_error
 
 from plotly.graph_objs import Bar, Box, Figure, Layout, Scatter
-from plotly.offline import init_notebook_mode, iplot, plot
 
 
 def uplift_frame(ite_pred: np.ndarray, policy: np.ndarray,
@@ -81,14 +80,16 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
     baseline_value = np.sum(mu[:, 0] + np.array(w == 0, dtype=int) * (y - mu[:, 0]) / ps[:, 0])
 
     # sort data according to the predicted ite values.
-    sorted_idx = np.argsort(np.max(ite_pred[:, 1:], axis=1))
-    y, w, policy, ps, mu, ite_pred = \
+    sorted_idx = np.argsort(ite_pred) if ite_pred.ndim == 1 else np.argsort(np.max(ite_pred, axis=1))
+    y, w, ite_pred, policy, ps, mu = \
         y[sorted_idx][::-1], w[sorted_idx][::-1], \
         ite_pred[sorted_idx][::-1], policy[sorted_idx][::-1], \
         ps[sorted_idx][::-1], mu[sorted_idx][::-1]
 
     # estimate lift and value at each treatment point.
     test_data: list = []
+    # Adding all zero value columns to choose the best treatment including baseline one.
+    ite_pred = np.c_[np.zeros((ite_pred.shape[0],)), ite_pred]
     for y_iter, w_iter, ps_iter, mu_iter, pol_iter, ite_iter in zip(y, w, ps, mu, policy, ite_pred):
 
         indicator = np.int((w_iter == pol_iter) & (ps_iter[pol_iter] > gamma))
@@ -118,11 +119,13 @@ def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray
     baseline_value = np.sum(mu[:, 0])
 
     # sort data according to the predicted ite values.
-    sorted_idx = np.argsort(np.max(ite_pred[:, 1:], axis=1))
+    sorted_idx = np.argsort(ite_pred) if ite_pred.ndim == 1 else np.argsort(np.max(ite_pred, axis=1))
     policy, mu, ite_pred = policy[sorted_idx][::-1], mu[sorted_idx][::-1], ite_pred[sorted_idx][::-1]
 
     # estimate lift and value at each treatment point.
     test_data: list = []
+    # Adding all zero value columns to choose the best treatment including baseline one.
+    ite_pred = np.c_[np.zeros((ite_pred.shape[0],)), ite_pred]
     for mu_iter, pol_iter, ite_iter in zip(mu, policy, ite_pred):
         treat_value += mu_iter[pol_iter]
         baseline_value -= mu_iter[0]
@@ -172,20 +175,29 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
         ps = np.ones((num_data, num_trts)) * pd.get_dummies(w).values.mean(axis=0) if ps is None else ps
         mu = np.zeros((num_data, num_trts)) if mu is None else mu
         # estimate potential outcomes of the given test data.
-        value_matrix = mu + (np.expand_dims(y, axis=1) * w - mu) / ps
+        value = mu + (np.expand_dims(y * w, axis=1) - mu) / ps
 
         # calc the optimal ite estimator and the optimal policy.
-        optimal_ite = value_matrix[:, 1] - value_matrix[:, 0]
-        optimal_policy = np.argmax(value_matrix, axis=1)
+        optimal_ite = value[:, 1] - value[:, 0]
+        optimal_policy = np.argmax(value, axis=1)
 
         # create the optimal uplift frame.
         optimal_frame = _create_uplift_frame_from_real_data(optimal_ite, optimal_policy, y, w, mu, ps)
 
     else:
+        # Adding all zero value columns to choose the best treatment including baseline one.
+        ite_true = np.c_[np.zeros((ite_true.shape[0],)), ite_true]
         optimal_policy = np.argmax(ite_true, axis=1)
         optimal_frame = _create_uplift_frame_from_synthetic(ite_true, optimal_policy, mu)
 
-    return optimal_frame
+    # convert to dataframe.
+    df = DataFrame(optimal_frame)
+    df.columns = [["y", "w", "policy", "ite_pred", "lift", "value"]] if ite_true is None else [["mu", "policy", "true_ite", "lift", "value"]]
+
+    # calc baseline lift
+    df["baseline_lift"] = df.index.values * df.loc[df.shape[0] - 1, "lift"][0] / df.shape[0]
+
+    return df
 
 
 def uplift_bar(y: np.ndarray, w: np.ndarray, ite_pred: np.ndarray,
@@ -296,11 +308,6 @@ def compare_uplift_curves(uplift_frames: List[DataFrame], name_list: List[str]=[
         Uplift curves.
 
     """
-    if not isinstance(uplift_frames, list):
-        raise TypeError("uplift_frames must be a list of pandas.DataFrames.")
-    if not isinstance(name_list, list):
-        raise TypeError("name_list must be a list of strings.")
-
     curve_list = [Scatter(x=np.arange(df.shape[0]) / df.shape[0],
                           y=np.ravel(df.lift.values), name=name, line=dict(width=4))
                   for df, name in zip(uplift_frames, name_list)]
@@ -331,11 +338,6 @@ def compare_modified_uplift_curves(uplift_frames: List[DataFrame], name_list: Li
         Modified uplift curves.
 
     """
-    if not isinstance(uplift_frames, list):
-        raise TypeError("uplift_frames must be a list of pandas.DataFrames.")
-    if not isinstance(name_list, list):
-        raise TypeError("name_list must be a list of strings.")
-
     curve_list = [Scatter(x=np.arange(df.shape[0]) / df.shape[0],
                           y=np.ravel(df.value.values), name=name, line=dict(width=4))
                   for df, name in zip(uplift_frames, name_list)]
