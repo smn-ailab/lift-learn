@@ -37,7 +37,7 @@ def sdr_mse(y: np.ndarray, w: np.ndarray, ite_pred: np.ndarray,
     Returns
     -------
     mse: float
-        Estimated mean squared error.
+        The estimated mean squared error for the ITE.
 
     References
     ----------
@@ -80,7 +80,6 @@ def expected_response(y: np.ndarray, w: np.ndarray, policy: np.ndarray,
 
     ps: array-like, shape = [n_samples]
         The estimated propensity scores.
-
 
     Returns
     -------
@@ -132,15 +131,15 @@ def uplift_frame(ite_pred: np.ndarray, policy: np.ndarray,
         The estimated propensity scores.
 
     gamma: float (default=0.0), optional
-        A switching parameter for doubly robust method.
+        The switching hyper-parameter.
 
     real_world: bool (default=True), optional
         Whether the given data is real-world or synthetic.
 
     Returns
     -------
-    df: Dataframe of shape = (n_samples, 9)
-        An uplift frame.
+    df: Dataframe of shape = [n_samples, ]
+        The uplift frame.
 
     """
     if real_world:
@@ -161,7 +160,7 @@ def uplift_frame(ite_pred: np.ndarray, policy: np.ndarray,
 def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray,
                                         y: np.ndarray, w: np.ndarray,
                                         mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None, gamma: float=0.0,) -> List:
-    """Create uplift from synthetic data."""
+    """Create uplift frame from synthetic data."""
     # initialize variables.
     num_data = w.shape[0]
     num_trts = np.unique(w).shape[0]
@@ -171,7 +170,7 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
     # preprocess potential outcomes and propensity estimations.
     ps = np.ones((num_data, num_trts)) * pd.get_dummies(w).values.mean(axis=0) if ps is None else ps
     mu = np.zeros((num_data, num_trts)) if mu is None else mu
-    # estimate value of the all baseline policy.
+    # estimate the value of the baseline policy.
     baseline_value = np.sum(mu[:, 0] + np.array(w == 0, dtype=int) * (y - mu[:, 0]) / ps[:, 0])
 
     # sort data according to the predicted ite values.
@@ -181,22 +180,14 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
         ite_pred[sorted_idx][::-1], policy[sorted_idx][::-1], \
         ps[sorted_idx][::-1], mu[sorted_idx][::-1]
 
-    # estimate lift and value at each treatment point.
     test_data: list = []
-    # Adding all zero value columns to choose the best treatment including baseline one.
+    # The best treatment for each data witout the baseline treatment.
     best_trt = np.argmax(ite_pred[:, 1:], axis=1) if num_trts != 2 else np.ones(num_data, dtype=int)
+    # Adding all zero value column.
     ite_pred = np.c_[np.zeros((ite_pred.shape[0],)), ite_pred]
+    # estimate lift and value at each treatment point.
     for y_iter, w_iter, ps_iter, mu_iter, pol_iter, trt_iter, ite_iter in zip(y, w, ps, mu, policy, best_trt, ite_pred):
-
-        # value
-        indicator = np.int((w_iter == pol_iter) & (ps_iter[pol_iter] > gamma))
-        if pol_iter == 0:
-            baseline_outcome += mu_iter[0] + indicator * (y_iter - mu_iter[0]) / ps_iter[0]
-        else:
-            baseline_value -= mu_iter[0]
-            treat_value += mu_iter[pol_iter] + indicator * (y_iter - mu_iter[pol_iter]) / ps_iter[pol_iter]
-
-        # lift
+        # update the lift estimates.
         indicator = np.int((w_iter == trt_iter) & (ps_iter[trt_iter] > gamma))
         if w_iter == 0:
             treat_outcome += mu_iter[trt_iter]
@@ -204,6 +195,14 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
         else:
             treat_outcome += mu_iter[trt_iter] + indicator * (y_iter - mu_iter[trt_iter]) / ps_iter[trt_iter]
             baseline_outcome += mu_iter[0]
+
+        # update the value estimates.
+        indicator = np.int((w_iter == pol_iter) & (ps_iter[pol_iter] > gamma))
+        if pol_iter == 0:
+            baseline_outcome += mu_iter[0] + indicator * (y_iter - mu_iter[0]) / ps_iter[0]
+        else:
+            baseline_value -= mu_iter[0]
+            treat_value += mu_iter[pol_iter] + indicator * (y_iter - mu_iter[pol_iter]) / ps_iter[pol_iter]
 
         # calc lift and value.
         lift, value = treat_outcome - baseline_outcome, (treat_value + baseline_value) / num_data
@@ -214,24 +213,25 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
 
 
 def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray, mu: np.ndarray) -> List:
-    """Create uplift from from synthetic data."""
+    """Create uplift frame from from synthetic data."""
     # initialize variables.
     num_data = mu.shape[0]
     treat_outcome = 0
     baseline_outcome = 0
     treat_value = 0.0
-    # estimate value of the all baseline policy.
+    # estimate the value of the baseline policy.
     baseline_value = np.sum(mu[:, 0])
 
     # sort data according to the predicted ite values.
     sorted_idx = np.argsort(ite_pred) if ite_pred.ndim == 1 else np.argsort(np.max(ite_pred, axis=1))
     policy, mu, ite_pred = policy[sorted_idx][::-1], mu[sorted_idx][::-1], ite_pred[sorted_idx][::-1]
 
-    # estimate lift and value at each treatment point.
     test_data: list = []
-    # Adding all zero value columns to choose the best treatment including baseline one.
+    # Adding all zero value column.
     ite_pred = np.c_[np.zeros((ite_pred.shape[0],)), ite_pred]
+    # estimate lift and value at each treatment point.
     for mu_iter, pol_iter, ite_iter in zip(mu, policy, ite_pred):
+        # update the lift and value estimates.
         treat_value += mu_iter[pol_iter]
         baseline_value -= mu_iter[0]
         treat_outcome += mu_iter[pol_iter]
@@ -248,7 +248,7 @@ def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray
 def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
                          mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None,
                          ite_true: Optional[np.ndarray]=None, gamma: float=0.) -> DataFrame:
-    """Create uplift frame, which is used to plot uplift curves or modified uplift curve.
+    """Create the uplift frame of the optimal uplift model.
 
     Parameters
     ----------
@@ -266,14 +266,14 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
         The estimated propensity scores.
 
     ite_true: array-like of shape = [n_samples, n_trts - 1]
-        The true values of Individual Treatment Effects.
+        The true values of the ITE.
 
     gamma: float (default=0.0), optional
-        A switching parameter for doubly robust method.
+        The switching hyper-parameter.
 
     Returns
     -------
-    df: Dataframe of shape = (n_samples, 9)
+    df: Dataframe of shape = [n_samples, ]
         The uplift frame of the optimal policy.
 
     """
@@ -286,17 +286,20 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
         _y, _w = np.expand_dims(y, axis=1), pd.get_dummies(w).values
         value = mu + np.array(ps > gamma, dtype=int) * _w * (_y - mu) / ps
 
-        # calc the optimal ite estimator and the optimal policy.
+        # calc the oracle ite values and the optimal policy.
         optimal_ite = value[:, 1] - value[:, 0]
         optimal_policy = np.argmax(value, axis=1)
 
-        # create the optimal uplift frame.
+        # create the optimal uplift frame for the given real-world dataset.
         optimal_frame = _create_uplift_frame_from_real_data(optimal_ite, optimal_policy, y, w, mu, ps)
 
     else:
-        # Adding all zero value columns to choose the best treatment including baseline one.
+        # Adding all zero value column.
         ite_true = np.c_[np.zeros((ite_true.shape[0],)), ite_true]
+        # calc the optimal policy.
         optimal_policy = np.argmax(ite_true, axis=1)
+
+        # create the optimal uplift frame for the given synthetic dataset.
         optimal_frame = _create_uplift_frame_from_synthetic(ite_true, optimal_policy, mu)
 
     # convert to dataframe.
@@ -336,7 +339,7 @@ def uplift_bar(ite_pred: np.ndarray, policy: np.ndarray, y: np.ndarray, w: np.nd
         The estimated propensity scores.
 
     gamma: float (default=0.0), optional
-        A switching parameter for doubly robust method.
+        The switching hyper-parameter.
 
     real_world: bool (default=True), optional
         Whether the given data is real-world or synthetic.
@@ -344,7 +347,7 @@ def uplift_bar(ite_pred: np.ndarray, policy: np.ndarray, y: np.ndarray, w: np.nd
     Returns
     -------
     fig: Figure
-        An uplift bar.
+        The uplift bar.
 
     """
     num_data, num_trts = w.shape[0], np.unique(w).shape[0]
@@ -364,6 +367,7 @@ def uplift_bar(ite_pred: np.ndarray, policy: np.ndarray, y: np.ndarray, w: np.nd
     labels, treat_outcome_list, baseline_outcome_list = [], [], []
     best_trt = np.argmax(ite_pred[:, 1:], axis=1) if num_trts != 2 else np.ones(num_data, dtype=int)
 
+    # estimate the ATE of each stratum.
     for n in np.arange(10):
         start, end = np.int(n * num_data / 10), np.int((n + 1) * num_data / 10) - 1
         treat_outcome, baseline_outcome = np.mean(value[start:end, best_trt[start:end]]), np.mean(value[start:end, 0])
@@ -385,15 +389,15 @@ def compare_uplift_curves(uplift_frames: List[DataFrame], name_list: List[str]=[
     Parameters
     ----------
     uplift_frames: list of DataFrames of shape = (n_samples, 9)
-        An uplift frame.
+        The list of uplift frames.
 
     name_list: list
-        Names of modeling methods.
+        The list of names of modeling methods.
 
     Returns
     -------
     fig: Figure
-        Uplift curves.
+        The uplift curves.
 
     """
     curve_list = [Scatter(x=np.arange(df.shape[0]) / df.shape[0],
@@ -423,7 +427,7 @@ def compare_modified_uplift_curves(uplift_frames: List[DataFrame], name_list: Li
     Returns
     -------
     fig: Figure
-        Modified uplift curves.
+        The modified uplift curves.
 
     """
     curve_list = [Scatter(x=np.arange(df.shape[0]) / df.shape[0],
