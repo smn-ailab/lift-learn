@@ -210,93 +210,72 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
     return df
 
 
-def uplift_bar(y: np.ndarray, w: np.ndarray, ite_pred: np.ndarray,
-               ps: Union[np.ndarray, None]=None, threshold: float=0.0, design: str="randomized") -> Figure:
+def uplift_bar(ite_pred: np.ndarray, policy: np.ndarray, y: np.ndarray, w: np.ndarray,
+               mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None,
+               gamma: float=0.0, real_world: bool=True) -> Figure:
     """Plot Uplift Bar.
 
     Parameters
     ----------
-    y: array-like of shape = (n_samples)
-        Observed target values.
+    ite_pred: array-like of shape = [n_samples, n_trts - 1]
+        The predicted values of Individual Treatment Effects.
 
-    w: array-like of shape = (n_samples)
-        Treatment assignment indicators.
+    policy: array-like of shape = [n_samples]
+        Treatment policy.
 
-    ite_pred: array-like of shape = (n_samples)
-        Estimated Individual Treatment Effects.
+    y : array-like, shape = [n_samples]
+        The target values (class labels in classification, real numbers in
+        regression).
 
-    ps: array-like of shape = (n_samples)
-        Estimated propensity scores.
+    w : array-like, shape = [n_samples]
+        The treatment assignment. The values should be binary.
 
-    threshold: float (default=0.0)
-        A clipping threshold for the estimated propensity score.
+    mu: array-like, shape = [n_samples]
+        The estimated potential outcomes.
 
-    design: string in ["randomized", "observational"] (default="randomized")
-        Whether the data gatherd through experimental or observational study.
+    ps: array-like, shape = [n_samples]
+        The estimated propensity scores.
+
+    gamma: float (default=0.0), optional
+        A switching parameter for doubly robust method.
+
+    real_world: bool (default=True), optional
+        Whether the given data is real-world or synthetic.
 
     Returns
     -------
     fig: Figure
         An uplift bar.
 
-    References
-    ----------
-    [1] 有賀康顕, 中山心太, 西林孝: 仕事で始める機械学習, オライリー・ジャパン, 2017.
-
     """
-    if not isinstance(y, np.ndarray):
-        raise TypeError("y must be a numpy.ndarray.")
-    if not isinstance(w, np.ndarray):
-        raise TypeError("w must be a numpy.ndarray.")
-    if not isinstance(ite_pred, np.ndarray):
-        raise TypeError("ite_pred must be a numpy.ndarray.")
-    if design not in ["randomized", "observational"]:
-        raise ValueError("Invalid value for design. Allowing string values are 'randomized', 'observational'.")
-
-    # sort data according to the estimated ITEs.
-    if design == "observational":
-        if not isinstance(ps, np.ndarray):
-            raise TypeError("ps must be a numpy.ndarray.")
-        if not isinstance(threshold, float):
-            raise TypeError("threshold must be a float.")
-        assert (np.max(ps) < 1) and (np.min(ps) > 0), "ps must be strictly between 0 and 1."
-        assert (threshold <= 1) or (threshold >= 0), "threshold must be strictly between 0 and 1."
-
-        df = DataFrame(np.vstack((y, w, ite_pred, ps)).T,
-                       columns=["y", "w", "ite_pred", "ps"]).sort_values(by="ite_pred", ascending=False).reset_index(drop=True)
-        qdf = DataFrame(columns=("y_treat", "y_control"))
+    num_data, num_trts = w.shape[0], np.unique(w).shape[0]
+    # preprocess potential outcome and propensity estimations.
+    ps = np.ones((num_data, num_trts)) * pd.get_dummies(w).values.mean(axis=0) if ps is None else ps
+    mu = np.zeros((num_data, num_trts)) if mu is None else mu
+    # sort data according to the predicted ite values.
+    sorted_idx = np.argsort(ite_pred) if num_trts == 2 else np.argsort(np.max(ite_pred, axis=1))
+    if real_world:
+        y, w = np.expand_dims(y, axis=1), pd.get_dummies(w).values
+        value = mu + np.array(ps > gamma, dtype=int) * w * (y - mu) / ps
     else:
-        df = DataFrame(np.vstack((y, w, ite_pred)).T,
-                       columns=["y", "w", "ite_pred"]).sort_values(by="ite_pred", ascending=False).reset_index(drop=True)
-        qdf = DataFrame(columns=("y_treat", "y_control"))
+        value = mu
+    value, ite_pred = value[sorted_idx][::-1], ite_pred[sorted_idx][::-1]
 
     # divide data into deciles.
+    labels, treat_outcome_list, baseline_outcome_list = [], [], []
+    best_trt = np.argmax(ite_pred[:, 1:], axis=1) if num_trts != 2 else np.ones(num_data, dtype=int)
+
     for n in np.arange(10):
-        start = (n * df.shape[0] / 10)
-        end = ((n + 1) * df.shape[0] / 10) - 1
-        _df = df.loc[start:end]
+        start, end = np.int(n * num_data / 10), np.int((n + 1) * num_data / 10) - 1
+        treat_outcome, baseline_outcome = np.mean(value[start:end, best_trt[start:end]]), np.mean(value[start:end, 0])
+        treat_outcome_list.append(treat_outcome)
+        baseline_outcome_list.append(baseline_outcome)
+        labels.append(f"{n * 10}% ~ {(n + 1) * 10}%")
 
-        if design == "observational":
-            ps_treat = np.clip(_df[_df.w == 1].ps.values, threshold, 1.0)
-            ps_control = 1.0 - np.clip(_df[_df.w == 0].ps.values, 0., 1.0 - threshold)
-            y_treat = _df[_df.w == 1].y.values
-            y_treat_estimator = np.sum(y_treat / ps_treat) / np.sum(1.0 / ps_treat)
-            y_control = _df[_df.w == 0].y.values
-            y_control_estimator = np.sum(y_control / ps_control) / np.sum(1.0 / ps_control)
+    trace1 = Bar(x=labels, y=treat_outcome_list, name="Treatment Group")
+    trace2 = Bar(x=labels, y=baseline_outcome_list, name="Control Group")
 
-        elif design == "randomized":
-            y_treat_estimator = np.mean(_df[_df.w == 1].y.values)
-            y_control_estimator = np.mean(_df[_df.w == 0].y.values)
-
-        label = f"{n * 10}%~{(n + 1) * 10}%"
-        qdf.loc[label] = [y_treat_estimator, y_control_estimator]
-
-    trace1 = Bar(x=qdf.index.tolist(),
-                 y=qdf.y_treat.tolist(), name="Treatment Group")
-    trace2 = Bar(x=qdf.index.tolist(),
-                 y=qdf.y_control.tolist(), name="Control Group")
-
-    layout = Layout(barmode="group", yaxis={"title": "Estimated Strata Outcome"}, xaxis={"title": "Uplift Score Percentile"})
+    layout = Layout(barmode="group", yaxis={"title": "Estimated Outcome"}, xaxis={"title": "Top ITE Percentile"})
     fig = Figure(data=[trace1, trace2], layout=layout)
     return fig
 
