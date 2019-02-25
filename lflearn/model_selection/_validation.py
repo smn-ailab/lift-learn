@@ -322,34 +322,95 @@ class OptunaSearchCV(BaseEstimator):
 
 
 def bootstrap_test_score(estimator: BaseEstimator,
-                         X_train: np.ndarray, y_train: np.ndarray, w_train: np.ndarray,
-                         X_test: np.ndarray,  y_test: np.ndarray, w_test: np.ndarray,
-                         mu_test: Optional[np.ndarray] = None, ps_test: Optional[np.ndarray] = None,
-                         n_iter: int = 100) -> List[float]:
-    """Compute the bootstrap metrics."""
-    # ========== Fit ==========
-    estimator.fit(X_train, y_train, w_train)
-    # =========================
+                         X: np.ndarray, y: np.ndarray, w: np.ndarray,
+                         mu: Optional[np.ndarray] = None, ps: Optional[np.ndarray] = None,
+                         gamma: float=0.0, n_iter: int = 10, alpha: float=0.95,
+                         scoring: str="value", verbose: bool=True, seed: int=0) -> List[float]:
+    """Compute the metric by the percentile method.
 
-    # Compute the bootstrap scores.
-    num_trts = np.unique(w_train).shape[0]
-    mu_test = np.zeros(w_test.shape[0]) if mu_test is None else mu_test[np.arange(w_test.shape[0]), w_test]
-    ps_test = pd.get_dummies(w_test).values.mean(axis=0)[w_test] if ps_test is None else ps_test[np.arange(w_test.shape[0]), w_test]
-    values: list = []
+    estimator : estimator object implementing 'fit'
+        The object to use to fit the data.
+
+    X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+        The training input samples. Sparse matrices are accepted only if
+        they are supported by the base estimator.
+
+    y : array-like, shape = [n_samples]
+        The target values (class labels in classification, real numbers in
+        regression).
+
+    w : array-like, shape = [n_samples]
+        The treatment assignment. The values should be binary.
+
+    mu: array-like, shape = [n_samples], optional (default=None)
+        The estimated potential outcomes.
+
+    ps: array-like, shape = [n_samples], optional (default=None)
+        The estimated propensity scores.
+
+    gamma: float, optional (default=0.0)
+        The switching hyper-parameter.
+
+    n_iter : int, (default=10)
+        The number of iterations.
+
+    alpha: float, (default=0.95)
+        The confidence level.
+
+    scoring : string, (default=None)
+        A single string representing a evaluation metric.
+
+    verbose: bool, (default=True)
+
+    seed: int, (default=0)
+
+    """
+    num_data, num_trts = w.shape[0], np.unique(w).shape[0]
+    # preprocess potential outcome and propensity estimations.
+    mu = np.zeros(num_data) if mu is None else mu
+    ps = pd.get_dummies(num_data).values.mean(axis=0) if ps is None else ps
+
+    scores: list = []
     for i in np.arange(n_iter):
-        # ========== predict for the bootstraps ==========
-        np.random.seed(i)
-        idx = np.random.choice(np.arange(X_test.shape[0]), size=X_test.shape[0], replace=True)
-        X_boot, y_boot, w_boot, mu_boot, ps_boot = X_test[idx], y_test[idx], w_test[idx], mu_test, ps_test
+        np.random.seed(seed + i)
+        estimator_ = clone(estimator)
+        # ========== index sampling with replacement. ==========
+        train_idx = np.random.choice(num_data, size=num_data, replace=True)
+        test_idx = np.array([idx for idx in np.arange(num_data) if idx not in train_idx.tolist()])
 
-        policy, _ = estimator.predict(X_boot)
+        X_train, y_train, w_train = X[train_idx], y[train_idx], w[train_idx]
+        X_test, y_test, w_test = X[test_idx], y[test_idx], w[test_idx]
+        mu_test, ps_test = mu[test_idx], ps[test_idx]
+        # ======================================================
+
+        # ========== Fit to the sampled training data. ==========
+        estimator_.fit(X_train, y_train, w_train)
+        # =======================================================
+
+        # ========== predict and evaluate for the test data. ==========
+        if scoring == "mse":
+            ite_pred = estimator.predict_ite(X_test)
+            metric = sdr_mse(y=y_test, w=w_test, ite_pred=ite_pred,
+                             mu=mu_test, ps=ps_test, gamma=gamma)
+
+        elif scoring == "value":
+            policy = estimator.predict(X_test)
+            metric = expected_response(y=y_test, w=w_test, policy=policy, mu=mu_test, ps=ps_test)
+
+        elif scoring in ["auuc", "aumuc"]:
+            ite_pred, policy = estimator.predict_ite(X_test), estimator.predict(X_test)
+            df = uplift_frame(ite_pred=ite_pred, policy=policy, y=y_test, w=w_test,
+                              mu=mu_test, ps=ps_test, gamma=gamma, real_world=True)
+            metric = np.mean(df.lift.values - df.baseline_lift.values) if scoring == "auuc" else np.mean(df.value.values)
         # ================================================
 
-    # ========== Evaluate ==========
-        indicator = np.array(w_boot == policy, dtype=int)
-        value = np.mean(mu_boot + (y_boot - mu_boot) * indicator / ps_boot)
-    # ==============================
+        scores.append(metric)
 
-        values.append(value)
+    if verbose:
+        # confidence intervals
+        p_lower = np.int(((1.0 - alpha) / 2.0) * 100)
+        p_upper = np.int(alpha * 100) + p_lower
+        upper, lower = np.percentile(scores, p_upper), np.percentile(scores, p_lower)
+        print(f"{alpha * 100}% confidence interval: [{np.round(lower, 3)}, {np.round(upper, 3)}]")
 
-    return values
+    return scores
