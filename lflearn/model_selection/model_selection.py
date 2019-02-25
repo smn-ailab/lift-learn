@@ -247,6 +247,10 @@ class OptunaSearchCV(BaseEstimator):
     random_state: int, optional, (default=None)
         The seed used by the random number generator in the KFold.
 
+    References
+    ----------
+    https://github.com/Y-oHr-N/mllib/blob/master/mllib/model_selection.py
+
     """
 
     def __init__(self, estimator: BaseEstimator, param_dist: Dict,
@@ -380,6 +384,11 @@ def bootstrap_val_score(estimator: BaseEstimator,
 
     seed: int, (default=0)
         Seed the generator of the bootstrap index.
+
+    Returns
+    -------
+    scores : list of float
+        Array of scores of the estimator for each run of the bootstrap trials.
 
     """
     num_data, num_trts = w.shape[0], np.unique(w).shape[0]

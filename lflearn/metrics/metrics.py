@@ -1,4 +1,4 @@
-"""Metrics to assess performance on ite prediction task."""
+"""This module contains metrics to assess performance of uplift models."""
 from typing import List, Optional, Tuple
 
 import numpy as np
