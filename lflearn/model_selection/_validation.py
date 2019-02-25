@@ -37,14 +37,17 @@ def cross_val_score(estimator: BaseEstimator, X: np.ndarray, y: np.ndarray, w: n
     ps: array-like, shape = [n_samples], optional (default=None)
         The estimated propensity scores.
 
-    gamma: float, optional (default=0.0)
+    gamma: float, (default=0.0)
         The switching hyper-parameter.
 
-    cv : int, cross-validation generator or an iterable, optional
+    cv : int, (default=3)
         Determines the cross-validation splitting strategy.
 
-    scoring : string, optional, (default=None)
+    scoring : string, (default="value")
         A single string representing a evaluation metric.
+
+    random_state: int, optional, (default=None)
+        The seed used by the random number generator in the KFold.
 
     Returns
     -------
@@ -124,11 +127,14 @@ class Objective:
         Dictionary with parameters names of potential outcome model (string) as keys and
         lists of parameter settings to try as values.
 
-    cv : int, cross-validation generator or an iterable, optional
+    cv : int, (default=3)
         Determines the cross-validation splitting strategy.
 
-    scoring : string, optional, (default=None)
+    scoring : string, (default="value")
         A single string representing a evaluation metric.
+
+    random_state: int, optional, (default=None)
+        The seed used by the random number generator in the KFold.
 
     """
 
@@ -216,10 +222,10 @@ class OptunaSearchCV(BaseEstimator):
         Dictionary with parameters names of potential outcome model (string) as keys and
         lists of parameter settings to try as values.
 
-    cv : int, cross-validation generator or an iterable, optional
+    cv : int, (default=3)
         Determines the cross-validation splitting strategy.
 
-    scoring : string, (default=None)
+    scoring : string, (default="value")
         A single string representing a evaluation metric.
 
     n_iter: int, (default=10)
@@ -231,9 +237,11 @@ class OptunaSearchCV(BaseEstimator):
     n_jobs: int, (default=1)
         The Number of parallel jobs.
 
-    seed: int, optional, (default=None)
+    seed: int, (default=0)
+        Seed the generator of the TPE sampler.
 
     random_state: int, optional, (default=None)
+        The seed used by the random number generator in the KFold.
 
     """
 
@@ -321,11 +329,11 @@ class OptunaSearchCV(BaseEstimator):
         return self
 
 
-def bootstrap_test_score(estimator: BaseEstimator,
-                         X: np.ndarray, y: np.ndarray, w: np.ndarray,
-                         mu: Optional[np.ndarray] = None, ps: Optional[np.ndarray] = None,
-                         gamma: float=0.0, n_iter: int = 10, alpha: float=0.95,
-                         scoring: str="value", verbose: bool=True, seed: int=0) -> List[float]:
+def bootstrap_val_score(estimator: BaseEstimator,
+                        X: np.ndarray, y: np.ndarray, w: np.ndarray,
+                        mu: Optional[np.ndarray] = None, ps: Optional[np.ndarray] = None,
+                        gamma: float=0.0, n_iter: int = 10, alpha: float=0.95,
+                        scoring: str="value", verbose: int=1, seed: int=0) -> List[float]:
     """Compute the metric by the percentile method.
 
     estimator : estimator object implementing 'fit'
@@ -348,7 +356,7 @@ def bootstrap_test_score(estimator: BaseEstimator,
     ps: array-like, shape = [n_samples], optional (default=None)
         The estimated propensity scores.
 
-    gamma: float, optional (default=0.0)
+    gamma: float, (default=0.0)
         The switching hyper-parameter.
 
     n_iter : int, (default=10)
@@ -357,12 +365,14 @@ def bootstrap_test_score(estimator: BaseEstimator,
     alpha: float, (default=0.95)
         The confidence level.
 
-    scoring : string, (default=None)
+    scoring : string, (default="value")
         A single string representing a evaluation metric.
 
-    verbose: bool, (default=True)
+    verbose: int, (default=1)
+        Verbosity level.
 
     seed: int, (default=0)
+        Seed the generator of the bootstrap index.
 
     """
     num_data, num_trts = w.shape[0], np.unique(w).shape[0]
