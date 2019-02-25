@@ -81,7 +81,7 @@ class TOM(TransformationBasedModel):
                  name: Optional[str]=None) -> None:
         """Initialize Class."""
         super().__init__(base_model, ps_model)
-        self.name = f"TOM({name})" if name is not None else "TOM"
+        self.name = name if name is not None else "TOM"
 
     def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
         """Build an uplift model from the training set (X, y, w).
@@ -137,7 +137,7 @@ class CVT(TransformationBasedModel):
                  name: Optional[str]=None) -> None:
         """Initialize Class."""
         super().__init__(base_model)
-        self.name = f"CVT({name})" if name is not None else "CVT"
+        self.name = name if name is not None else "CVT"
 
     def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
         """Build an uplift model from the training set (X, y, w).

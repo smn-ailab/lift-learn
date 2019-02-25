@@ -19,9 +19,11 @@ class UpliftModelInterface:
         X : {array-like, sparse matrix} of shape = [n_samples, n_features]
             The training input samples. Sparse matrices are accepted only if
             they are supported by the base estimator.
+
         y : array-like, shape = [n_samples]
             The target values (class labels in classification, real numbers in
             regression).
+
         w : array-like, shape = [n_samples]
             The treatment assignment.
 
@@ -157,7 +159,7 @@ class SMACommon(BaseEstimator, UpliftModelInterface):
         """Initialize Class."""
         self.po_model = po_model
         self.fitted_po_models: list = []
-        self.name = f"SMA{name}" if name is not None else "SMA"
+        self.name = name if name is not None else "SMA"
         self.is_classifier = is_classifier
 
     def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
@@ -247,7 +249,7 @@ class SDRMCommon(TransformationBasedModel):
         self.po_model = po_model
         self.fitted_po_models: list = []
         self.gamma = gamma
-        self.name = f"SDRM({name})" if name is not None else "SDRM"
+        self.name = name if name is not None else "SDRM"
         self.is_classifier = is_classifier
 
     def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray) -> None:
