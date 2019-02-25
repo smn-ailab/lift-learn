@@ -7,7 +7,7 @@ from sklearn.base import BaseEstimator, clone
 from sklearn.model_selection import KFold, train_test_split
 
 from causalml.meta import SMAClassifier, SMARegressor
-from causalml.metrics import cab_mse, expected_response, uplift_frame
+from causalml.metrics import sdr_mse, expected_response, uplift_frame
 from optuna import create_study
 from optuna.samplers import TPESampler
 
@@ -15,7 +15,43 @@ from optuna.samplers import TPESampler
 def cross_val_score(estimator: BaseEstimator, X: np.ndarray, y: np.ndarray, w: np.ndarray,
                     mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None,
                     gamma: float=0.0, cv: int=3, scoring: str="value", random_state: int=0) -> List[float]:
-    """Cross valudation for uplift modeling."""
+    """Evaluate metric(s) by cross-validation.
+
+    estimator : estimator object implementing 'fit'
+        The object to use to fit the data.
+
+    X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+        The training input samples. Sparse matrices are accepted only if
+        they are supported by the base estimator.
+
+    y : array-like, shape = [n_samples]
+        The target values (class labels in classification, real numbers in
+        regression).
+
+    w : array-like, shape = [n_samples]
+        The treatment assignment. The values should be binary.
+
+    mu: array-like, shape = [n_samples], optional (default=None)
+        The estimated potential outcomes.
+
+    ps: array-like, shape = [n_samples], optional (default=None)
+        The estimated propensity scores.
+
+    gamma: float, optional (default=0.0)
+        The switching hyper-parameter.
+
+    cv : int, cross-validation generator or an iterable, optional
+        Determines the cross-validation splitting strategy.
+
+    scoring : string, optional, (default=None)
+        A single string representing a evaluation metric.
+
+    Returns
+    -------
+    scores : list of float
+        Array of scores of the estimator for each run of the cross validation.
+
+    """
     # Score list
     scores: list = []
     # KFold Splits
@@ -31,22 +67,18 @@ def cross_val_score(estimator: BaseEstimator, X: np.ndarray, y: np.ndarray, w: n
         estimator.fit(X_train, y_train, w_train)
         # =========================
 
-        # ========== Predict ==========
-        if estimator.um_type == "ipm":
-            ite_pred = estimator.predict(X_test)
-            policy = np.array(ite_pred > 0, dtype=int)
-        elif estimator.um_type == "tdf":
-            policy, ite_pred = estimator.predict(X_test)
-        # =============================
-
         # ========== Evaluate ==========
         if scoring == "mse":
-            metric = cab_mse(y_test, w_test, ite_pred, mu_test, ps_test, gamma)
+            ite_pred = estimator.predict_ite(X_test)
+            metric = sdr_mse(y=y_test, w=w_test, ite_pred=ite_pred,
+                             mu=mu_test, ps=ps_test, gamma=gamma)
 
         elif scoring == "value":
-            metric = expected_response(y_test, w_test, policy, mu_test, ps_test)
+            policy = estimator.predict(X_test)
+            metric = expected_response(y=y_test, w=w_test, policy=policy, mu=mu_test, ps=ps_test)
 
         elif scoring in ["auuc", "aumuc"]:
+            ite_pred, policy = estimator.predict_ite(X_test), estimator.predict(X_test)
             df = uplift_frame(ite_pred=ite_pred, y=y_test, w=w_test,
                               mu=mu_test, ps=ps_test, gamma=gamma, real_world=True)
             metric = np.mean(df.lift.values - df.baseline_lift.values) if scoring == "auuc" else np.mean(df.value.values)
