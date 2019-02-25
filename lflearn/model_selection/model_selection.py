@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, clone
-from sklearn.model_selection import KFold, train_test_split
+from sklearn.model_selection import KFold
 
 from metrics import sdr_mse, expected_response, uplift_frame
 from optuna import create_study
@@ -119,6 +119,9 @@ class Objective:
     ps: array-like, shape = [n_samples], optional (default=None)
         The estimated propensity scores.
 
+    gamma: float, (default=0.0)
+        The switching hyper-parameter.
+
     param_dist_base_model: Dict
         Dictionary with parameters names of base model (string) as keys and
         lists of parameter settings to try as values.
@@ -140,7 +143,7 @@ class Objective:
 
     def __init__(self, estimator: BaseEstimator, param_dist: Dict,
                  X: np.ndarray, y: np.ndarray, w: np.ndarray,
-                 mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None,
+                 mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None, gamma: float=0.,
                  param_dist_base_model: Optional[dict]=None,
                  param_dist_po_model: Optional[dict]=None,
                  cv: int=3, scoring: str="value",
@@ -151,6 +154,7 @@ class Objective:
         self.w = w
         self.mu = mu
         self.ps = ps
+        self.gamma = gamma
         self.estimator = estimator
         self.param_dist = param_dist
         self.param_dist_base_model = param_dist_base_model
@@ -198,7 +202,7 @@ class Objective:
 
         # estimate cross validation score.
         scores = cross_val_score(estimator=estimator,
-                                 X=self.X, y=self.y, w=self.w, mu=self.mu, ps=self.ps,
+                                 X=self.X, y=self.y, w=self.w, mu=self.mu, ps=self.ps, gamma=self.gamma,
                                  cv=self.cv, scoring=self.scoring, random_state=self.random_state)
 
         return np.mean(scores) if self.scoring == "mse" else - np.mean(scores)
@@ -265,7 +269,7 @@ class OptunaSearchCV(BaseEstimator):
         self.random_state = random_state
 
     def fit(self, X: np.ndarray, y: np.ndarray, w: np.ndarray,
-            mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None) -> BaseEstimator:
+            mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None, gamma: float=0.) -> BaseEstimator:
         """Run fit with Tree-structured Parzen Estimator (TPE) Approach.
 
         X : {array-like, sparse matrix} of shape = [n_samples, n_features]
@@ -285,9 +289,12 @@ class OptunaSearchCV(BaseEstimator):
         ps: array-like, shape = [n_samples], optional (default=None)
             The estimated propensity scores.
 
+        gamma: float, (default=0.0)
+            The switching hyper-parameter.
+
         """
         objective = Objective(self.estimator, self.param_dist,
-                              X, y, w, mu, ps,
+                              X, y, w, mu, ps, gamma,
                               self.param_dist_base_model, self.param_dist_po_model,
                               self.cv, self.scoring, self.random_state)
         self.sampler_ = TPESampler(seed=self.seed)
