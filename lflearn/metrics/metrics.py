@@ -160,7 +160,41 @@ def uplift_frame(ite_pred: np.ndarray, policy: np.ndarray,
 def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray,
                                         y: np.ndarray, w: np.ndarray,
                                         mu: Optional[np.ndarray], ps: Optional[np.ndarray], gamma: float) -> DataFrame:
-    """Create uplift frame from real-world data."""
+    """Create uplift frame from real-world data.
+
+    Parameters
+    ----------
+    ite_pred: array-like of shape = [n_samples, n_trts - 1]
+        The predicted values of Individual Treatment Effects.
+
+    policy: array-like of shape = [n_samples]
+        Treatment policy.
+
+    y : array-like, shape = [n_samples]
+        The target values (class labels in classification, real numbers in
+        regression).
+
+    w : array-like, shape = [n_samples]
+        The treatment assignment. The values should be binary.
+
+    mu: array-like, shape = [n_samples]
+        The estimated potential outcomes. If None, then average uplift and expected response
+        are estimated by the IPS method.
+
+    ps: array-like, shape = [n_samples]
+        The estimated propensity scores. If None, then the given data is regarded as RCT data and
+        average uplift and expected response are estimated without dealing with the effect of confounders.
+
+    gamma: float (default=0.0)
+        The switching hyper-parameter.
+
+
+    Returns
+    -------
+    df: Dataframe
+        The uplift frame. Columns are ["y", "w", "policy", "ite_pred", "lift", "value"].
+
+    """
     # initialize variables.
     num_data = w.shape[0]
     num_trts = np.unique(w).shape[0]
@@ -216,7 +250,26 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
 
 
 def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray, mu: np.ndarray) -> DataFrame:
-    """Create uplift frame from synthetic data."""
+    """Create uplift frame from synthetic data.
+
+    Parameters
+    ----------
+    ite_pred: array-like of shape = [n_samples, n_trts - 1]
+        The predicted values of Individual Treatment Effects.
+
+    policy: array-like of shape = [n_samples]
+        Treatment policy.
+
+    mu: array-like, shape = [n_samples]
+        The true potential outcomes.
+
+
+    Returns
+    -------
+    df: Dataframe
+        The uplift frame. Columns are ["mu", "policy", "true_ite", "lift", "value"].
+
+    """
     # initialize variables.
     num_data = mu.shape[0]
     treat_outcome = 0
