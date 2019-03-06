@@ -25,13 +25,14 @@ def sdr_mse(y: np.ndarray, w: np.ndarray, ite_pred: np.ndarray,
     ite_pred: array-like of shape = (n_samples)
         The predicted values of Individual Treatment Effects.
 
-    mu: array-like, shape = [n_samples]
-        The estimated potential outcomes.
+    mu: array-like, shape = [n_samples], optional (default=None)
+        The estimated potential outcomes. If None, then MSE is estimated by the IPS method.
 
-    ps: array-like, shape = [n_samples]
-        The estimated propensity scores.
+    ps: array-like, shape = [n_samples], optional (default=None)
+        The estimated propensity scores. If None, then the given data is regarded as RCT data and
+        MSE is estimated without dealing with the effect of confounders.
 
-    gamma: float, optional (default=0.0)
+    gamma: float, (default=0.0)
         The switching hyper-parameter.
 
     Returns
@@ -75,11 +76,13 @@ def expected_response(y: np.ndarray, w: np.ndarray, policy: np.ndarray,
     policy: array-like of shape = [n_samples]
         Treatment policy.
 
-    mu: array-like, shape = [n_samples]
-        The estimated potential outcomes.
+    mu: array-like, shape = [n_samples], optional (default=None)
+        The estimated potential outcomes. If None, then expected response is estimated
+        by the IPS method.
 
-    ps: array-like, shape = [n_samples]
-        The estimated propensity scores.
+    ps: array-like, shape = [n_samples], optional (default=None)
+        The estimated propensity scores. If None, then the given data is regarded as RCT data and
+        expected response is estimated without dealing with the effect of confounders.
 
     Returns
     -------
@@ -117,29 +120,35 @@ def uplift_frame(ite_pred: np.ndarray, policy: np.ndarray,
     policy: array-like of shape = [n_samples]
         Treatment policy.
 
-    y : array-like, shape = [n_samples]
+    y : array-like, shape = [n_samples], optional (default=None)
         The target values (class labels in classification, real numbers in
         regression).
 
-    w : array-like, shape = [n_samples]
+    w : array-like, shape = [n_samples], optional (default=None)
         The treatment assignment. The values should be binary.
 
-    mu: array-like, shape = [n_samples]
-        The estimated potential outcomes.
+    mu: array-like, shape = [n_samples], optional (default=None)
+        The estimated potential outcomes. If None, then average uplift and expected response
+        are estimated by the IPS method.
 
-    ps: array-like, shape = [n_samples]
-        The estimated propensity scores.
+    ps: array-like, shape = [n_samples], optional (default=None)
+        The estimated propensity scores. If None, then the given data is regarded as RCT data and
+        average uplift and expected response are estimated without dealing with the effect of confounders.
 
-    gamma: float (default=0.0), optional
+    gamma: float (default=0.0)
         The switching hyper-parameter.
 
-    real_world: bool (default=True), optional
-        Whether the given data is real-world or synthetic.
+    real_world: bool (default=True)
+        Whether the given data is real-world or synthetic. If True, average uplift and expected response are
+        estimated from the ovserved variables. If False, then we have the groud truth of them.
+
 
     Returns
     -------
-    df: Dataframe of shape = [n_samples, ]
+    df: Dataframe
         The uplift frame.
+        For real world datasets, columns are ["y", "w", "policy", "ite_pred", "lift", "value"].
+        For synthetic datasets, columns are ["mu", "policy", "true_ite", "lift", "value"].
 
     """
     if real_world:
@@ -259,22 +268,27 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
     w : array-like, shape = [n_samples]
         The treatment assignment. The values should be binary.
 
-    mu: array-like, shape = [n_samples]
-        The estimated potential outcomes.
+    mu: array-like, shape = [n_samples], optional (default=None)
+        The estimated potential outcomes. If None, then average uplift and expected response
+        are estimated by the IPS method.
 
-    ps: array-like, shape = [n_samples]
-        The estimated propensity scores.
+    ps: array-like, shape = [n_samples], optional (default=None)
+        The estimated propensity scores. If None, then the given data is regarded as RCT data and
+        average uplift and expected response are estimated without dealing with the effect of confounders.
 
     ite_true: array-like of shape = [n_samples, n_trts - 1]
-        The true values of the ITE.
+        The true values of the ITE. If None, then the given data is regarded as real-world and
+        average uplift and expected response are estimated from the ovserved variables.
 
-    gamma: float (default=0.0), optional
+    gamma: float (default=0.0)
         The switching hyper-parameter.
 
     Returns
     -------
-    df: Dataframe of shape = [n_samples, ]
+    df: Dataframe
         The uplift frame of the optimal policy.
+        For real world datasets, columns are ["y", "w", "policy", "ite_pred", "lift", "value"].
+        For synthetic datasets, columns are ["mu", "policy", "true_ite", "lift", "value"].
 
     """
     if ite_true is None:
