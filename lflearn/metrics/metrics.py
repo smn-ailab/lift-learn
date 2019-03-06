@@ -143,24 +143,17 @@ def uplift_frame(ite_pred: np.ndarray, policy: np.ndarray,
 
     """
     if real_world:
-        test_data = _create_uplift_frame_from_real_data(ite_pred, policy, y, w, mu, ps, gamma)
+        df = _create_uplift_frame_from_real_data(ite_pred, policy, y, w, mu, ps, gamma)
     else:
-        test_data = _create_uplift_frame_from_synthetic(ite_pred, policy, mu)
-
-    # convert to dataframe.
-    df = DataFrame(test_data)
-    df.columns = [["y", "w", "policy", "ite_pred", "lift", "value"]] if real_world else [["mu", "policy", "true_ite", "lift", "value"]]
-
-    # calc baseline lift
-    df["baseline_lift"] = df.index.values * df.loc[df.shape[0] - 1, "lift"][0] / df.shape[0]
+        df = _create_uplift_frame_from_synthetic(ite_pred, policy, mu)
 
     return df
 
 
 def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray,
                                         y: np.ndarray, w: np.ndarray,
-                                        mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None, gamma: float=0.0,) -> List:
-    """Create uplift frame from synthetic data."""
+                                        mu: Optional[np.ndarray], ps: Optional[np.ndarray], gamma: float) -> List:
+    """Create uplift frame from real-world data."""
     # initialize variables.
     num_data = w.shape[0]
     num_trts = np.unique(w).shape[0]
@@ -174,16 +167,15 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
     baseline_value = np.sum(mu[:, 0] + np.array(w == 0, dtype=int) * (y - mu[:, 0]) / ps[:, 0])
 
     # sort data according to the predicted ite values.
-    sorted_idx = np.argsort(ite_pred) if ite_pred.ndim == 1 else np.argsort(np.max(ite_pred, axis=1))
+    sorted_idx = np.argsort(-ite_pred) if ite_pred.ndim == 1 else np.argsort(-np.max(ite_pred, axis=1))
     y, w, ite_pred, policy, ps, mu = \
-        y[sorted_idx][::-1], w[sorted_idx][::-1], \
-        ite_pred[sorted_idx][::-1], policy[sorted_idx][::-1], \
-        ps[sorted_idx][::-1], mu[sorted_idx][::-1]
+        y[sorted_idx], w[sorted_idx], ite_pred[sorted_idx], \
+        policy[sorted_idx], ps[sorted_idx], mu[sorted_idx]
 
     test_data: list = []
     # The best treatment for each data witout the baseline treatment.
     best_trt = np.argmax(ite_pred[:, 1:], axis=1) if num_trts != 2 else np.ones(num_data, dtype=int)
-    # Adding all zero value column.
+    # Adding all zero value column to have the same number of columns with num_trts.
     ite_pred = np.c_[np.zeros((ite_pred.shape[0],)), ite_pred]
     # estimate lift and value at each treatment point.
     for y_iter, w_iter, ps_iter, mu_iter, pol_iter, trt_iter, ite_iter in zip(y, w, ps, mu, policy, best_trt, ite_pred):
@@ -206,14 +198,18 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
 
         # calc lift and value.
         lift, value = treat_outcome - baseline_outcome, (treat_value + baseline_value) / num_data
-
         test_data.append([y_iter, w_iter, pol_iter, ite_iter[pol_iter], lift, value])
+
+    # convert to dataframe.
+    df = DataFrame(test_data, columns=["y", "w", "policy", "ite_pred", "lift", "value"])
+    # calc baseline lift
+    df["baseline_lift"] = df.index.values * df.loc[df.shape[0] - 1, "lift"][0] / df.shape[0]
 
     return test_data
 
 
 def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray, mu: np.ndarray) -> List:
-    """Create uplift frame from from synthetic data."""
+    """Create uplift frame from synthetic data."""
     # initialize variables.
     num_data = mu.shape[0]
     treat_outcome = 0
@@ -223,11 +219,11 @@ def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray
     baseline_value = np.sum(mu[:, 0])
 
     # sort data according to the predicted ite values.
-    sorted_idx = np.argsort(ite_pred) if ite_pred.ndim == 1 else np.argsort(np.max(ite_pred, axis=1))
-    policy, mu, ite_pred = policy[sorted_idx][::-1], mu[sorted_idx][::-1], ite_pred[sorted_idx][::-1]
+    sorted_idx = np.argsort(-ite_pred) if ite_pred.ndim == 1 else np.argsort(-np.max(ite_pred, axis=1))
+    policy, mu, ite_pred = policy[sorted_idx], mu[sorted_idx], ite_pred[sorted_idx]
 
     test_data: list = []
-    # Adding all zero value column.
+    # Adding all zero value column to have the same number of columns with num_trts.
     ite_pred = np.c_[np.zeros((ite_pred.shape[0],)), ite_pred]
     # estimate lift and value at each treatment point.
     for mu_iter, pol_iter, ite_iter in zip(mu, policy, ite_pred):
@@ -239,8 +235,12 @@ def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray
 
         # calc lift and value.
         lift, value = treat_outcome - baseline_outcome, (treat_value + baseline_value) / num_data
-
         test_data.append([mu_iter[pol_iter], pol_iter, ite_iter[pol_iter], lift, value])
+
+    # convert to dataframe.
+    df = DataFrame(test_data, columns=["mu", "policy", "true_ite", "lift", "value"])
+    # calc baseline lift
+    df["baseline_lift"] = df.index.values * df.loc[df.shape[0] - 1, "lift"][0] / df.shape[0]
 
     return test_data
 
@@ -285,31 +285,20 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
         # estimate potential outcomes of the given test data.
         _y, _w = np.expand_dims(y, axis=1), pd.get_dummies(w).values
         value = mu + np.array(ps > gamma, dtype=int) * _w * (_y - mu) / ps
-
         # calc the oracle ite values and the optimal policy.
-        optimal_ite = value[:, 1] - value[:, 0]
-        optimal_policy = np.argmax(value, axis=1)
-
+        optimal_ite, optimal_policy = value[:, 1] - value[:, 0], np.argmax(value, axis=1)
         # create the optimal uplift frame for the given real-world dataset.
-        optimal_frame = _create_uplift_frame_from_real_data(optimal_ite, optimal_policy, y, w, mu, ps)
+        optimal_frame = _create_uplift_frame_from_real_data(optimal_ite, optimal_policy, y, w, mu, ps, gamma)
 
     else:
-        # Adding all zero value column.
+        # Adding all zero value column to have the same number of columns with num_trts.
         ite_true = np.c_[np.zeros((ite_true.shape[0],)), ite_true]
         # calc the optimal policy.
         optimal_policy = np.argmax(ite_true, axis=1)
-
         # create the optimal uplift frame for the given synthetic dataset.
         optimal_frame = _create_uplift_frame_from_synthetic(ite_true, optimal_policy, mu)
 
-    # convert to dataframe.
-    df = DataFrame(optimal_frame)
-    df.columns = [["y", "w", "policy", "ite_pred", "lift", "value"]] if ite_true is None else [["mu", "policy", "true_ite", "lift", "value"]]
-
-    # calc baseline lift
-    df["baseline_lift"] = df.index.values * df.loc[df.shape[0] - 1, "lift"][0] / df.shape[0]
-
-    return df
+    return optimal_frame
 
 
 def uplift_bar(ite_pred: np.ndarray, policy: np.ndarray, y: np.ndarray, w: np.ndarray,
