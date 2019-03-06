@@ -1,0 +1,7 @@
+numpy
+optuna
+pandas
+pip
+plotly
+pytest
+scikit-learn
