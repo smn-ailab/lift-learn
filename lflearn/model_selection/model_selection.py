@@ -32,10 +32,11 @@ def cross_val_score(estimator: BaseEstimator, X: np.ndarray, y: np.ndarray, w: n
         The treatment assignment. The values should be binary.
 
     mu: array-like, shape = [n_samples], optional (default=None)
-        The estimated potential outcomes.
+        The estimated potential outcomes. If None, then metric is estimated by the IPS method.
 
     ps: array-like, shape = [n_samples], optional (default=None)
-        The estimated propensity scores.
+        The estimated propensity scores. If None, then the given data is regarded as RCT data and
+        metric is estimated without dealing with the effect of confounders.
 
     gamma: float, (default=0.0)
         The switching hyper-parameter.
@@ -55,9 +56,9 @@ def cross_val_score(estimator: BaseEstimator, X: np.ndarray, y: np.ndarray, w: n
         Array of scores of the estimator for each run of the cross validation.
 
     """
-    # Score list
+    # score list.
     scores: list = []
-    # KFold Splits
+    # define KFold splits.
     kf = KFold(n_splits=cv, random_state=random_state)
 
     for train_idx, test_idx in kf.split(X):
@@ -114,10 +115,11 @@ class Objective:
         The treatment assignment. The values should be binary.
 
     mu: array-like, shape = [n_samples], optional (default=None)
-        The estimated potential outcomes.
+        The estimated potential outcomes. If None, then metric is estimated by the IPS method.
 
     ps: array-like, shape = [n_samples], optional (default=None)
-        The estimated propensity scores.
+        The estimated propensity scores. If None, then the given data is regarded as RCT data and
+        metric is estimated without dealing with the effect of confounders.
 
     gamma: float, (default=0.0)
         The switching hyper-parameter.
@@ -288,15 +290,17 @@ class OptunaSearchCV(BaseEstimator):
             The treatment assignment. The values should be binary.
 
         mu: array-like, shape = [n_samples], optional (default=None)
-            The estimated potential outcomes.
+            The estimated potential outcomes. If None, then metric is estimated by the IPS method.
 
         ps: array-like, shape = [n_samples], optional (default=None)
-            The estimated propensity scores.
+            The estimated propensity scores. If None, then the given data is regarded as RCT data and
+            metric is estimated without dealing with the effect of confounders.
 
         gamma: float, (default=0.0)
             The switching hyper-parameter.
 
         """
+        # define objective function for the TPE optimizer.
         objective = Objective(self.estimator, self.param_dist,
                               X, y, w, mu, ps, gamma,
                               self.param_dist_base_model, self.param_dist_po_model,
@@ -311,20 +315,19 @@ class OptunaSearchCV(BaseEstimator):
         self.best_params_ = self.study_.best_params
         self.best_value_ = self.study_.best_value
         self.trials_dataframe = self.study_.trials_dataframe()
-        # set the best estimator.
         estimator = clone(self.estimator)
-        # best params of the uplift modeling method.
+        # set best params for the uplift modeling method.
         params = {name: value
                   for name, value in self.best_params_.items()
                   if ("base_model" not in name) & ("po_model" not in name)}
-        # best params of the base model.
+        # set best params for the base model.
         if (self.param_dist_base_model is not None):
             base_model = clone(self.estimator.base_model)
             params_base_model = {name.replace("_base_model", ""): value
                                  for name, value in self.best_params_.items()
                                  if "base_model" in name}
             params.update({"base_model": base_model.set_params(**params_base_model)})
-        # best params of the potnetial outcome model.
+        # set best params for the potnetial outcome model.
         if (self.param_dist_po_model is not None):
             po_model = clone(self.estimator.po_model)
             params_po_model = {name.replace("_po_model", ""): value
@@ -362,10 +365,11 @@ def bootstrap_val_score(estimator: BaseEstimator,
         The treatment assignment. The values should be binary.
 
     mu: array-like, shape = [n_samples], optional (default=None)
-        The estimated potential outcomes.
+        The estimated potential outcomes. If None, then metric is estimated by the IPS method.
 
     ps: array-like, shape = [n_samples], optional (default=None)
-        The estimated propensity scores.
+        The estimated propensity scores. If None, then the given data is regarded as RCT data and
+        metric is estimated without dealing with the effect of confounders.
 
     gamma: float, (default=0.0)
         The switching hyper-parameter.
@@ -433,7 +437,7 @@ def bootstrap_val_score(estimator: BaseEstimator,
         scores.append(metric)
 
     if verbose:
-        # confidence intervals
+        # estimate confidence intervals by the percentile method.
         p_lower = np.int(((1.0 - alpha) / 2.0) * 100)
         p_upper = np.int(alpha * 100) + p_lower
         upper, lower = np.percentile(scores, p_upper), np.percentile(scores, p_lower)
