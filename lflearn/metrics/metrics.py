@@ -159,7 +159,7 @@ def uplift_frame(ite_pred: np.ndarray, policy: np.ndarray,
 
 def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray,
                                         y: np.ndarray, w: np.ndarray,
-                                        mu: Optional[np.ndarray], ps: Optional[np.ndarray], gamma: float) -> List:
+                                        mu: Optional[np.ndarray], ps: Optional[np.ndarray], gamma: float) -> DataFrame:
     """Create uplift frame from real-world data."""
     # initialize variables.
     num_data = w.shape[0]
@@ -215,7 +215,7 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
     return df
 
 
-def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray, mu: np.ndarray) -> List:
+def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray, mu: np.ndarray) -> DataFrame:
     """Create uplift frame from synthetic data."""
     # initialize variables.
     num_data = mu.shape[0]
