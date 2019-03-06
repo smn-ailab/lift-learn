@@ -210,9 +210,9 @@ def _create_uplift_frame_from_real_data(ite_pred: np.ndarray, policy: np.ndarray
     # convert to dataframe.
     df = DataFrame(test_data, columns=["y", "w", "policy", "ite_pred", "lift", "value"])
     # calc baseline lift
-    df["baseline_lift"] = df.index.values * df.loc[df.shape[0] - 1, "lift"][0] / df.shape[0]
+    df["baseline_lift"] = df.index.values * df.loc[df.shape[0] - 1, "lift"] / df.shape[0]
 
-    return test_data
+    return df
 
 
 def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray, mu: np.ndarray) -> List:
@@ -247,9 +247,9 @@ def _create_uplift_frame_from_synthetic(ite_pred: np.ndarray, policy: np.ndarray
     # convert to dataframe.
     df = DataFrame(test_data, columns=["mu", "policy", "true_ite", "lift", "value"])
     # calc baseline lift
-    df["baseline_lift"] = df.index.values * df.loc[df.shape[0] - 1, "lift"][0] / df.shape[0]
+    df["baseline_lift"] = df.index.values * df.loc[df.shape[0] - 1, "lift"] / df.shape[0]
 
-    return test_data
+    return df
 
 
 def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
