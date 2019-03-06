@@ -317,7 +317,7 @@ def optimal_uplift_frame(y: np.ndarray, w: np.ndarray,
 
 def uplift_bar(ite_pred: np.ndarray, policy: np.ndarray, y: np.ndarray, w: np.ndarray,
                mu: Optional[np.ndarray]=None, ps: Optional[np.ndarray]=None,
-               gamma: float=0.0, real_world: bool=True) -> Figure:
+               gamma: float=0.0, num_strata: int=10, real_world: bool=True) -> Figure:
     """Plot Uplift Bar.
 
     Parameters
@@ -335,17 +335,22 @@ def uplift_bar(ite_pred: np.ndarray, policy: np.ndarray, y: np.ndarray, w: np.nd
     w : array-like, shape = [n_samples]
         The treatment assignment. The values should be binary.
 
-    mu: array-like, shape = [n_samples]
-        The estimated potential outcomes.
+    mu: array-like, shape = [n_samples], optional (default=None)
+        The estimated potential outcomes. If None, then ATE is estimated by the IPS method.
 
-    ps: array-like, shape = [n_samples]
-        The estimated propensity scores.
+    ps: array-like, shape = [n_samples], optional (default=None)
+        The estimated propensity scores. If None, then the given data is regarded as RCT data and
+        ATE is estimated without dealing with the effect of confounders.
 
-    gamma: float (default=0.0), optional
+    gamma: float (default=0.0)
         The switching hyper-parameter.
 
-    real_world: bool (default=True), optional
-        Whether the given data is real-world or synthetic.
+    num_strata: int (default=10)
+        The number of strata in stratified ATE estimation.
+
+    real_world: bool (default=True)
+        Whether the given data is real-world or synthetic. If True, ATE is estimated from
+        the ovserved variables. If False, then we have the groud truth of it.
 
     Returns
     -------
@@ -371,12 +376,12 @@ def uplift_bar(ite_pred: np.ndarray, policy: np.ndarray, y: np.ndarray, w: np.nd
     best_trt = np.argmax(ite_pred[:, 1:], axis=1) if num_trts != 2 else np.ones(num_data, dtype=int)
 
     # estimate the ATE of each stratum.
-    for n in np.arange(10):
-        start, end = np.int(n * num_data / 10), np.int((n + 1) * num_data / 10) - 1
+    for n in np.arange(num_strata):
+        start, end = np.int(n * num_data / num_strata), np.int((n + 1) * num_data / num_strata) - 1
         treat_outcome, baseline_outcome = np.mean(value[start:end, best_trt[start:end]]), np.mean(value[start:end, 0])
         treat_outcome_list.append(treat_outcome)
         baseline_outcome_list.append(baseline_outcome)
-        labels.append(f"{n * 10}% ~ {(n + 1) * 10}%")
+        labels.append(f"{np.int(n * 100 / num_strata)}% ~ {np.int((n + 1) * 100 / num_strata)}%")
 
     trace1 = Bar(x=labels, y=treat_outcome_list, name="Treatment Group")
     trace2 = Bar(x=labels, y=baseline_outcome_list, name="Control Group")
